@@ -1,18 +1,27 @@
-import React from "react";
+import React, { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import GlassCard from "@/components/GlassCard";
-import { theme } from "@/constants/theme";
-import Screen from "@/components/Screen";
+import { Button, List, Switch } from "@ant-design/react-native";
+import Screen from "../../components/Screen";
+import GlassCard from "../../components/GlassCard";
+import { theme } from "../../constants/theme";
 
 export default function SettingsScreen() {
+  const [dailyDecayEnabled, setDailyDecayEnabled] = useState(true);
+
   return (
     <Screen>
       <View style={{ paddingTop: 6 }}>
         <Text style={styles.h}>Settings</Text>
+
         <GlassCard style={{ marginTop: 12 }}>
-          <Text style={styles.p}>
-            Next we can add: Sign in buttons, Sync to Cloud UI, daily points deduction UI.
-          </Text>
+          <View style={{ height: 12 }} />
+          <Button type="primary" style={styles.btn}>
+            Sigin
+          </Button>
+          <View style={{ height: 10 }} />
+          <Button type="warning" style={styles.btn}>
+            Logout
+          </Button>
         </GlassCard>
       </View>
     </Screen>
@@ -21,5 +30,6 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   h: { color: theme.colors.text, fontSize: 22, fontWeight: "900", marginTop: 8 },
-  p: { color: theme.colors.muted, fontWeight: "700", lineHeight: 20 },
+  itemText: { color: theme.colors.text, fontWeight: "900" },
+  btn: { borderRadius: 14 },
 });

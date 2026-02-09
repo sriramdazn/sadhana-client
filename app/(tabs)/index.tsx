@@ -1,56 +1,62 @@
-import React from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { router } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import React, { useMemo, useState } from "react";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 import GlassCard from "@/components/GlassCard";
 import { theme } from "@/constants/theme";
 import Screen from "@/components/Screen";
-import Pill from "@/components/Pills";
 import Rows from "@/components/Rows";
 import { Icon } from "@ant-design/react-native";
-import WeeklyPoints from "@/components/WeeklyPoints";
 
+type Sadhana = { id: string; title: string; points: number };
 export default function HomeScreen() {
+  const sadhanas: Sadhana[] = useMemo(
+    () => [
+      { id: "surya", title: "Surya Namaskar", points: 50 },
+      { id: "yoga", title: "Yogasanas", points: 50 },
+      { id: "prana", title: "Pranayama", points: 50 },
+      { id: "med", title: "Meditation", points: 50 },
+    ],
+    []
+  );
+  const [pendingConfirmId, setPendingConfirmId] = useState<string | null>(null);
+  const [completedIds, setCompletedIds] = useState<Record<string, boolean>>({});
+  const [dailyDecay] = useState(-50);
+  const [totalPoints, setTotalPoints] = useState(350);
+
+  const handleTilePress = (item: Sadhana) => {
+    if (completedIds[item.id]) return;
+
+    if (pendingConfirmId === item.id) {
+      // confirm
+      setCompletedIds((p) => ({ ...p, [item.id]: true }));
+      setPendingConfirmId(null);
+      setTotalPoints((p) => p + item.points);
+      return;
+    }
+
+    setPendingConfirmId(item.id);
+  };
+
   return (
     <Screen>
       <ScrollView contentContainerStyle={{ paddingBottom: 28 }} showsVerticalScrollIndicator={false}>
-        {/* Top bar */}
-        <View style={styles.topbar}>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => router.push("/(tabs)/settings")}>
-            <Ionicons name="menu" size={20} color={theme.colors.text} />
-          </TouchableOpacity>
-
-          <TouchableOpacity onPress={() => router.push("/(tabs)/settings")} style={styles.avatarWrap}>
-            <View style={styles.avatarWrap}>
-              <Icon name="user" size={22} color="#F3F2FF" />
-            </View>
-          </TouchableOpacity>
-        </View>
-
         <Text style={styles.hello}>Hello, Jey</Text>
-
-        {/* date pills */}
-        <View style={styles.pillsRow}>
-          <Pill label="Mon 8" />
-          <Pill label="Tue 9" />
-          <Pill label="Wed 10" />
-          <Pill label="Thu 11" />
-          <Pill label="Fri 12" active />
-          <Pill label="Sat 13" />
-          <Pill label="Sun 14" />
-        </View>
+          <View style={styles.pointsRow}>
+              <View style={styles.circle}>
+                <Text style={styles.circleText}>{totalPoints}pts</Text>
+              </View>
+            </View>
+           <Text style={styles.decay}>Daily Decay: {dailyDecay}</Text>
 
         <Text style={styles.sectionTitle}>Today’s Sadhanas</Text>
 
         <GlassCard style={{ marginTop: 10 }}>
           <View style={{ gap: 12 }}>
-            <Rows title="Morning Meditation" subtitle="7:30 AM" variant="peach" action="done" />
+            <Rows title="Morning Meditation" subtitle="+50 pts" variant="peach" action="done" />
             <Rows title="Yoga Practice" subtitle="+15 pts" variant="coral" action="add" />
             <Rows title="Gratitude Journaling" subtitle="+10 pts" variant="sand" action="add" />
           </View>
 
           <View style={{ height: 14 }} />
-          <WeeklyPoints />
         </GlassCard>
       </ScrollView>
     </Screen>
@@ -58,46 +64,29 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  topbar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  iconBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 16,
+  pointsRow: { alignItems: "center", paddingTop: 4, paddingBottom: 10 },
+  circle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 2,
+    borderColor: "rgba(243,242,255,0.35)",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderWidth: 1,
-    borderColor: theme.colors.border,
+    backgroundColor: "rgba(0,0,0,0.10)",
   },
-
-  avatarWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 16,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(243,242,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.08)",
-    alignItems: "center",
-    justifyContent: "center",
+  circleText: { color: theme.colors.text, fontWeight: "900", fontSize: 18 },
+  decay: {
+    color: theme.colors.muted,
+    fontWeight: "800",
+    textAlign: "center",
+    marginBottom: 14,
   },
-  avatar: { width: "100%", height: "100%" },
-
   hello: {
     color: theme.colors.text,
     fontWeight: "900",
     fontSize: 24,
     marginTop: 6,
-    marginBottom: 10,
-  },
-  pillsRow: {
-    flexDirection: "row",
-    paddingVertical: 8,
     marginBottom: 10,
   },
   sectionTitle: {
@@ -107,3 +96,4 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
 });
+
