@@ -3,22 +3,40 @@ import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { theme } from "@/constants/theme";
 
+type Variant = "peach" | "coral" | "sand";
+
 type Props = {
   title: string;
   subtitle: string;
-  variant?: "peach" | "coral" | "sand";
+  index: number;
   action?: "add" | "done";
+  variant?: Variant;
 };
 
-const bgMap = {
+const bgMap: Record<Variant, string> = {
   peach: "rgba(242,179,155,0.26)",
   coral: "rgba(240,126,126,0.26)",
   sand: "rgba(232,210,181,0.22)",
 };
 
-export default function SadhanaRow({ title, subtitle, variant = "peach", action = "add" }: Props) {
+function getVariantFromIndex(index: number): Variant {
+  const cycle = index % 3;
+  if (cycle === 0) return "peach";
+  if (cycle === 1) return "coral";
+  return "sand";
+}
+
+export default function SadhanaRow({
+  title,
+  subtitle,
+  index,
+  action = "add",
+  variant,
+}: Props) {
+  const resolvedVariant = variant ?? getVariantFromIndex(index);
+
   return (
-    <View style={[styles.row, { backgroundColor: bgMap[variant] }]}>
+    <View style={[styles.row, { backgroundColor: bgMap[resolvedVariant] }]}>
       <View style={styles.leftIcon}>
         <Ionicons name="sparkles" size={18} color={theme.colors.text} />
       </View>

@@ -4,7 +4,6 @@ import GlassCard from "@/components/GlassCard";
 import { theme } from "@/constants/theme";
 import Screen from "@/components/Screen";
 import Rows from "@/components/Rows";
-import { Icon } from "@ant-design/react-native";
 
 type Sadhana = { id: string; title: string; points: number };
 export default function HomeScreen() {
@@ -32,14 +31,12 @@ export default function HomeScreen() {
       setTotalPoints((p) => p + item.points);
       return;
     }
-
     setPendingConfirmId(item.id);
   };
 
   return (
     <Screen>
       <ScrollView contentContainerStyle={{ paddingBottom: 28 }} showsVerticalScrollIndicator={false}>
-        <Text style={styles.hello}>Hello, Jey</Text>
           <View style={styles.pointsRow}>
               <View style={styles.circle}>
                 <Text style={styles.circleText}>{totalPoints}pts</Text>
@@ -51,9 +48,10 @@ export default function HomeScreen() {
 
         <GlassCard style={{ marginTop: 10 }}>
           <View style={{ gap: 12 }}>
-            <Rows title="Morning Meditation" subtitle="+50 pts" variant="peach" action="done" />
-            <Rows title="Yoga Practice" subtitle="+15 pts" variant="coral" action="add" />
-            <Rows title="Gratitude Journaling" subtitle="+10 pts" variant="sand" action="add" />
+          {sadhanas.map((item, index) => {
+              return ( 
+                <Rows index={index} title={item.title} subtitle="+${item.points} pts" action="done" />
+              )})};
           </View>
 
           <View style={{ height: 14 }} />
@@ -81,13 +79,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     textAlign: "center",
     marginBottom: 14,
-  },
-  hello: {
-    color: theme.colors.text,
-    fontWeight: "900",
-    fontSize: 24,
-    marginTop: 6,
-    marginBottom: 10,
   },
   sectionTitle: {
     color: theme.colors.text,
