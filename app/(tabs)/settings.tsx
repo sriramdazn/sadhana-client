@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { Button, List, Switch } from "@ant-design/react-native";
+import { Button } from "@ant-design/react-native";
 import Screen from "../../components/Screen";
 import GlassCard from "../../components/GlassCard";
 import { theme } from "../../constants/theme";

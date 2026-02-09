@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { Button } from "@ant-design/react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Screen from "../../components/Screen";
 import GlassCard from "../../components/GlassCard";
+import Dialog from "../../components/Dialog";
 import { theme } from "../../constants/theme";
 
 type LogItem = { id: string; title: string; points: number };
@@ -33,20 +33,22 @@ export default function JourneyScreen() {
   const [data, setData] = useState<DayLogs[]>(initialData);
   const [deleteTarget, setDeleteTarget] = useState<{ day: string; id: string } | null>(null);
 
+  const openDeleteDialog = (payload: { day: string; id: string }) => setDeleteTarget(payload);
+  const closeDeleteDialog = () => setDeleteTarget(null);
+
   const confirmDelete = () => {
     if (!deleteTarget) return;
-
+    const { day, id } = deleteTarget;
     setData((prev) =>
       prev
-        .map((d) => {
-          if (d.dayLabel !== deleteTarget.day) return d;
-          return { ...d, items: d.items.filter((x) => x.id !== deleteTarget.id) };
-        })
+        .map((d) =>
+          d.dayLabel === day ? { ...d, items: d.items.filter((x) => x.id !== id) } : d
+        )
         .filter((d) => d.items.length > 0)
     );
-
     setDeleteTarget(null);
   };
+  
 
   return (
     <Screen>
@@ -63,7 +65,7 @@ export default function JourneyScreen() {
                   {day.items.map((item) => (
                     <Pressable
                       key={item.id}
-                      onPress={() => setDeleteTarget({ day: day.dayLabel, id: item.id })}
+                      onPress={() => openDeleteDialog({ day: day.dayLabel, id: item.id })}
                       style={styles.logRow}
                     >
                       <Text style={styles.logText}>{item.title}</Text>
@@ -77,23 +79,15 @@ export default function JourneyScreen() {
         </GlassCard>
       </ScrollView>
 
-      {/* Delete confirm modal */}
-      <Modal transparent visible={!!deleteTarget} animationType="fade" onRequestClose={() => setDeleteTarget(null)}>
-        <Pressable style={styles.backdrop} onPress={() => setDeleteTarget(null)}>
-          <Pressable style={styles.modalCard} onPress={() => {}}>
-            <Text style={styles.modalTitle}>Are you sure?</Text>
-
-            <View style={styles.modalActions}>
-              <Button type="ghost" onPress={() => setDeleteTarget(null)} style={styles.modalBtn}>
-                Cancel
-              </Button>
-              <Button type="warning" onPress={confirmDelete} style={styles.modalBtn}>
-                Delete
-              </Button>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <Dialog
+        visible={!!deleteTarget}
+        title="Are you sure?"
+        onCancel={closeDeleteDialog}
+        onConfirm={confirmDelete}
+        cancelText="Cancel"
+        confirmText="Delete"
+        confirmType="warning"
+      />
     </Screen>
   );
 }
@@ -115,24 +109,4 @@ const styles = StyleSheet.create({
   },
   logText: { color: theme.colors.text, fontWeight: "900" },
   logPts: { color: theme.colors.muted, fontWeight: "900" },
-
-  backdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.55)",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 18,
-  },
-  modalCard: {
-    width: "100%",
-    maxWidth: 360,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: "rgba(25,24,48,0.95)",
-    padding: 16,
-  },
-  modalTitle: { color: theme.colors.text, fontWeight: "900", fontSize: 18, textAlign: "center" },
-  modalActions: { flexDirection: "row", gap: 10, marginTop: 14 },
-  modalBtn: { flex: 1, borderRadius: 14 },
 });
