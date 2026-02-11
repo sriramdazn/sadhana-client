@@ -1,11 +1,12 @@
 import { useCallback, useMemo, useState } from "react";
 import { createJourneyService, type DayLogs, type LogItem } from "@services/journeyService";
+import { JourneyService } from "@/app/features/sadhana/types";
 import { useAuthStatus } from "./useAuthStatus";
 
 export function useJourneyStore() {
   const [days, setDays] = useState<DayLogs[]>([]);
+  const { isLoggedIn, accessToken } = useAuthStatus();
   const [loading, setLoading] = useState(true);
-  const {isLoggedIn, accessToken } = useAuthStatus();
 
   const journeyService = useMemo(() => {
     return createJourneyService({ isLoggedIn, accessToken });

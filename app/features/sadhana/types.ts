@@ -29,3 +29,8 @@ export type JourneyState = {
   days: JourneyDay[];
   updatedAt: number;
 };
+
+export type JourneyService = {
+  isLoggedIn?: boolean;
+  accessToken?: string | null;
+};

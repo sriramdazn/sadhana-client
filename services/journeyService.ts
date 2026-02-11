@@ -1,13 +1,9 @@
+import { JourneyService } from "@/app/features/sadhana/types";
 import { API_BASE_URL } from "@/constants/api.constant";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export type LogItem = { id: string; title: string; points: number };
 export type DayLogs = { dayLabel: string; items: LogItem[] };
-
-type JourneyServiceArgs = {
-  isLoggedIn?: boolean;
-  accessToken?: string | null;
-};
 
 const JOURNEY_KEY = "sadhana_journey_v1";
 
@@ -61,7 +57,7 @@ function deleteLocalItem(prev: DayLogs[], dayLabel: string, itemId: string): Day
 export function createJourneyService({
   isLoggedIn = false,
   accessToken = null,
-}: JourneyServiceArgs = {}) {
+}: JourneyService = {}) {
   const canUseRemote = isLoggedIn && !!accessToken && !!API_BASE_URL;
 
   return {

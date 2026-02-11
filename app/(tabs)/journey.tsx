@@ -6,12 +6,9 @@ import Screen from "@/components/Screen";
 import GlassCard from "@/components/GlassCard";
 import Dialog from "@/components/Dialog";
 import { theme } from "@/constants/theme";
-import { useAuthStatus } from "@/hooks/useAuthStatus";
-
-const { isLoggedIn, accessToken } = useAuthStatus();
 
 export default function JourneyScreen() {
-  const { days, loading, load, deleteItem } = useJourneyStore({ isLoggedIn, accessToken });
+  const { days, loading, load, deleteItem } = useJourneyStore();
 
   const [deleteTarget, setDeleteTarget] = useState<{ day: string; id: string } | null>(null);
 
