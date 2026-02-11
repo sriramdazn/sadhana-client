@@ -1,23 +1,11 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import { useColorScheme } from '@/hooks/useColorScheme';
-import 'react-native-reanimated';
+import { useGuestSyncToBackend } from "../hooks/useGuestSyncToBackend";
 
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
+const API_BASE = process.env.EXPO_PUBLIC_API_BASE_URL ?? " api domain";
 
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
+// session values
+// const isLoggedIn = !!session;
+// const userId = session?.user?.id ?? null;
+// const accessToken = session?.access_token ?? null;
 
-  return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
-  );
-}
+useGuestSyncToBackend({ isLoggedIn: false, userId: null, accessToken: null, apiBaseUrl: API_BASE });
+

@@ -1,9 +1,9 @@
 import React, { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import Screen from "../../components/Screen";
-import GlassCard from "../../components/GlassCard";
-import { theme } from "../../constants/theme";
-import { Button, Input } from "antd";
+import { Button, Input } from "@ant-design/react-native";
+import Screen from "@/components/Screen";
+import GlassCard from "@/components/GlassCard";
+import { theme } from "@/constants/theme";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const SettingsScreen: React.FC = () => {

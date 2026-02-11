@@ -6,9 +6,12 @@
     "jsx": "react-jsx",
     "strict": true,
     "paths": {
-      "@/*": [
-        "./*"
-      ]
+      "@/*": ["./*"],
+      "@hooks/*": ["./hooks/*"],
+      "@services/*": ["./services/*"],
+      "@contsnts/*": ["./constants/*"],
+      "@components/*": ["./components/*"],
+      "@constants/*": ["./constants/*"]
     }
   },
   "include": [
@@ -18,3 +21,4 @@
     "expo-env.d.ts"
   ]
 }
+
