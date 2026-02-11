@@ -20,6 +20,6 @@ export default function Screen({ children }: React.PropsWithChildren) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.bgBottom },
+  root: { flex: 1, backgroundColor: theme.colors.bgBottom, padding: 15 },
   safe: { flex: 1, paddingHorizontal: 16, paddingTop: 10 },
 });

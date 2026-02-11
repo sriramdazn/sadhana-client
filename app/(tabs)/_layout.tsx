@@ -3,26 +3,74 @@ import { Tabs } from "expo-router";
 import { BlurView } from "expo-blur";
 import { AntDesign } from "@expo/vector-icons";
 import { theme } from "../../constants/theme";
+import { Platform } from "react-native";
 
 export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: theme.colors.text,
-        tabBarInactiveTintColor: theme.colors.muted,
+        tabBarActiveTintColor: "#fff",
+        tabBarInactiveTintColor: "rgba(255,255,255,0.5)",
+
         tabBarStyle: {
-          borderTopColor: theme.colors.border,
-          backgroundColor: "rgba(25,24,48,0.65)",
+          position: "absolute",
+
+          // left: 16,
+          // right: 16,
+          // bottom: 16,
+
+          height: 65,
+
+          borderRadius: 24,
+          borderTopColor: "rgba(25,24,48,0.7)",
+
+          backgroundColor: "rgba(25,24,48,0.7)",
+
+         
+
+          elevation: 12, 
+
+          
+          shadowOpacity: 0.25,
+          shadowRadius: 10,
+          shadowOffset: { width: 0, height: 6 },
         },
-        tabBarBackground: () => <BlurView intensity={18} tint="dark" style={{ flex: 1 }} />,
+
+        tabBarItemStyle: {
+          paddingVertical: 6,
+        },
+
+        tabBarLabelStyle: {
+          fontSize: 9,
+          fontWeight: "600",
+          marginBottom: 4,
+        },
+
+        tabBarBackground: () => (
+          <BlurView
+            intensity={80}
+            tint="dark"
+            style={{
+              flex: 1,
+              borderRadius: 10,
+              overflow: "hidden",
+            }}
+          />
+        ),
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: "Home",
-          tabBarIcon: ({ color, size }) => <AntDesign name="home" size={size} color={color} />,
+          tabBarIcon: ({ color, size, focused }) => (
+            <AntDesign
+              name="home"
+              size={focused ? size + 4 : size}
+              color={color}
+            />
+          ),
         }}
       />
 
@@ -30,7 +78,13 @@ export default function TabLayout() {
         name="journey"
         options={{
           title: "Journey",
-          tabBarIcon: ({ color, size }) => <AntDesign name="profile" size={size} color={color} />,
+          tabBarIcon: ({ color, size, focused }) => (
+            <AntDesign
+              name="profile"
+              size={focused ? size + 4 : size}
+              color={color}
+            />
+          ),
         }}
       />
 
@@ -38,7 +92,13 @@ export default function TabLayout() {
         name="settings"
         options={{
           title: "Settings",
-          tabBarIcon: ({ color, size }) => <AntDesign name="setting" size={size} color={color} />,
+          tabBarIcon: ({ color, size, focused }) => (
+            <AntDesign
+              name="setting"
+              size={focused ? size + 4 : size}
+              color={color}
+            />
+          ),
         }}
       />
     </Tabs>

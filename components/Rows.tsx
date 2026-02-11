@@ -8,8 +8,11 @@ type Variant = "peach" | "coral" | "sand";
 type Props = {
   title: string;
   subtitle: string;
+  points: number;
   index: number;
   action?: "add" | "done";
+  isDone?: boolean;
+  onAdd: () => void; 
   variant?: Variant;
 };
 
@@ -29,8 +32,11 @@ function getVariantFromIndex(index: number): Variant {
 export default function SadhanaRow({
   title,
   subtitle,
+  points,
   index,
   action = "add",
+  isDone = false,
+  onAdd,
   variant,
 }: Props) {
   const resolvedVariant = variant ?? getVariantFromIndex(index);
@@ -46,12 +52,17 @@ export default function SadhanaRow({
         <Text style={styles.sub}>{subtitle}</Text>
       </View>
 
-      <TouchableOpacity style={styles.btn}>
-        {action === "done" ? (
-          <Ionicons name="checkmark" size={18} color={theme.colors.text} />
-        ) : (
-          <Text style={styles.btnText}>+ Add</Text>
-        )}
+      <TouchableOpacity
+        style={[styles.btn, isDone && { opacity: 0.5 }]}
+        disabled={isDone}
+        onPress={onAdd}
+      >
+        {isDone ? (
+        <Ionicons name="checkmark" size={18} color={theme.colors.text} />
+      ) : (
+        <Text style={styles.btnText}>+ {points}</Text>
+      )}
+
       </TouchableOpacity>
     </View>
   );

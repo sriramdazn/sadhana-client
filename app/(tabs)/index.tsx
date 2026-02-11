@@ -1,159 +1,173 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useMemo, useState, useEffect, useRef } from "react";
+import { ScrollView, StyleSheet, Text, View, Image } from "react-native";
 import GlassCard from "@/components/GlassCard";
 import { theme } from "@/constants/theme";
 import Screen from "@/components/Screen";
 import Rows from "@/components/Rows";
+import { getSadhanas } from "@/services/SadhanaService";
 import Dialog from "@/components/Dialog";
-import { useJourneyStore } from "@hooks/useJourneyStore";
 
-type Sadhana = { id: string; title: string; points: number };
+import StarAnimation from "@/components/StarAnimation";
 
-const API_URL = "http://localhost:8086/v1/sadanas"; // change if needed
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-function ordinal(n: number) {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod100 >= 11 && mod100 <= 13) return "th";
-  if (mod10 === 1) return "st";
-  if (mod10 === 2) return "nd";
-  if (mod10 === 3) return "rd";
-  return "th";
-}
-function todayLabel(date = new Date()) {
-  const d = date.getDate();
-  return `${d}${ordinal(d)} ${MONTHS[date.getMonth()]}`;
-}
 
-function normalizeSadanas(payload: any): Sadhana[] {
-  const list = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : [];
-  return list
-    .map((x: any) => ({
-      id: String(x.id ?? x._id ?? x.key ?? x.title ?? Math.random()),
-      title: String(x.title ?? x.name ?? ""),
-      points: Number(x.points ?? x.score ?? 0),
-    }))
-    .filter((x: Sadhana) => x.title && Number.isFinite(x.points));
-}
+
+type Sadhana = {
+  id: string;
+  name: string;
+  points: number;
+  isActive: boolean;
+};
+
 
 export default function HomeScreen() {
   const [sadhanas, setSadhanas] = useState<Sadhana[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [errorText, setErrorText] = useState("");
-
-  const [selected, setSelected] = useState<Sadhana | null>(null);
-  const [completedIds, setCompletedIds] = useState<Record<string, boolean>>({});
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<Sadhana | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
   const [dailyDecay] = useState(-50);
   const [totalPoints, setTotalPoints] = useState(350);
 
-  // TODO: wire real auth later
-  const isLoggedIn = false;
-  const accessToken: string | null = null;
+  const [showStars, setShowStars] = useState(false);
 
-  const { addItem } = useJourneyStore({ isLoggedIn, accessToken });
+  const handleAdd = (item: Sadhana) => {
+    if (completedIds.has(item.id)) return;
+
+    setSelectedItem(item);
+    setShowConfirm(true);
+  };
+
+  const confirmAdd = () => {
+    if (!selectedItem) return;
+  
+    // Scroll to top
+    scrollRef.current?.scrollTo({
+      y: 0,
+      animated: true,
+    });
+  
+    // Start animation
+    setShowStars(true);
+  
+    // Close dialog
+    setShowConfirm(false);
+  };
+  
+
+
 
   useEffect(() => {
-    const controller = new AbortController();
-
-    (async () => {
-      setLoading(true);
-      setErrorText("");
+    const loadSadhanas = async () => {
       try {
-        const res = await fetch(API_URL, { signal: controller.signal });
-        if (!res.ok) throw new Error(`API error: ${res.status}`);
-        const json = await res.json();
-        const list = normalizeSadanas(json);
-        setSadhanas(list);
-      } catch (e: any) {
-        if (e?.name === "AbortError") return;
-        setErrorText(e?.message ?? "Failed to load sadhanas");
-      } finally {
-        setLoading(false);
-      }
-    })();
+   
 
-    return () => controller.abort();
+      //get sadhana
+        const data: Sadhana[] = await getSadhanas();
+
+        const activeData = data.filter(item => item.isActive);
+
+        setSadhanas(activeData);
+      } catch (err) {
+        console.log("Error loading sadhanas");
+      }
+    };
+
+    loadSadhanas();
   }, []);
 
-  const handleRowPress = (item: Sadhana) => {
-    if (completedIds[item.id]) return;
-    setSelected(item);
-  };
-
-  const closeDialog = () => setSelected(null);
-
-  const confirmAddToJourney = async () => {
-    if (!selected) return;
-
-    // mark done + update points
-    setCompletedIds((p) => ({ ...p, [selected.id]: true }));
-    setTotalPoints((p) => p + selected.points);
-
-    // add to journey (guest => AsyncStorage; logged-in => API)
-    await addItem(todayLabel(), {
-      id: `${Date.now()}_${selected.id}`,
-      title: selected.title,
-      points: selected.points,
-    });
-
-    setSelected(null);
-  };
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={{ paddingBottom: 28 }} showsVerticalScrollIndicator={false}>
-        <View style={styles.pointsRow}>
-          <View style={styles.circle}>
-            <Text style={styles.circleText}>{totalPoints}pts</Text>
-          </View>
+      <StarAnimation
+        visible={showStars}
+        onComplete={() => {
+          if (!selectedItem) return;
+
+          const item = selectedItem;
+
+          // Update points AFTER animation
+          setTotalPoints((prev) => prev + item.points);
+          setCompletedIds((prev) => new Set(prev).add(item.id));
+
+          setShowStars(false);
+          setSelectedItem(null);
+        }}
+      />
+
+
+      <ScrollView ref={scrollRef} contentContainerStyle={{ paddingBottom: 28 }} showsVerticalScrollIndicator={false}>
+        <View style={styles.decayWrap}>
+          <Text style={styles.decay}>Daily Decay: {dailyDecay}</Text>
         </View>
+
+        <View style={styles.hero}>
+
+
+          <View style={styles.ring}>
+
+            <View style={styles.innerGlow} />
+
+            <Image
+              source={require("@/assets/yoga.png")}
+              style={styles.poseImage}
+              resizeMode="contain"
+            />
+
+
+
+
+            <View style={styles.pointsOverlay}>
+              <Text style={styles.points}>{totalPoints}</Text>
+              <Text style={styles.pointsLabel}>Points</Text>
+            </View>
+
+          </View>
+
+        </View>
+
+
+
 
         <Text style={styles.decay}>Daily Decay: {dailyDecay}</Text>
         <Text style={styles.sectionTitle}>Today’s Sadhanas</Text>
 
         <GlassCard style={{ marginTop: 10 }}>
-          {loading ? (
-            <Text style={styles.muted}>Loading...</Text>
-          ) : errorText ? (
-            <Text style={styles.error}>{errorText}</Text>
-          ) : (
-            <View style={{ gap: 12 }}>
-              {sadhanas.map((item, index) => {
-                const done = !!completedIds[item.id];
-                return (
-                  <TouchableOpacity
-                    key={item.id}
-                    activeOpacity={0.85}
-                    disabled={done}
-                    onPress={() => handleRowPress(item)}
-                    style={{ opacity: done ? 0.55 : 1 }}
-                  >
-                    <Rows
-                      index={index}
-                      title={item.title}
-                      subtitle={`+${item.points} pts`}
-                      action={done ? "done" : "add"}
-                    />
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          )}
+          <View style={{ gap: 12 }}>
 
-          <View style={{ height: 14 }} />
+            {sadhanas.map((item, index) => (
+              <Rows
+                key={item.id}
+                index={index}
+                title={item.name}
+                subtitle="Daily Practice"
+                points={item.points}
+                action="done"
+                isDone={completedIds.has(item.id)}
+                onAdd={() => handleAdd(item)}
+              />
+            ))}
+
+
+          </View>
+
+         
         </GlassCard>
       </ScrollView>
 
       <Dialog
-        visible={!!selected}
-        title={selected ? `Add "${selected.title}" to Journey?` : "Add to Journey?"}
-        onCancel={closeDialog}
-        onConfirm={confirmAddToJourney}
+        visible={showConfirm}
+        title="Are you sure you did this sadhana?"
+        onCancel={() => {
+          setShowConfirm(false);
+          setSelectedItem(null);
+        }}
+        onConfirm={confirmAdd}
         cancelText="Cancel"
-        confirmText="Add"
+        confirmText="Yes"
         confirmType="primary"
       />
+
     </Screen>
   );
 }
@@ -171,8 +185,135 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.10)",
   },
   circleText: { color: theme.colors.text, fontWeight: "900", fontSize: 18 },
-  decay: { color: theme.colors.muted, fontWeight: "800", textAlign: "center", marginBottom: 14 },
-  sectionTitle: { color: theme.colors.text, fontWeight: "900", fontSize: 16, marginTop: 8 },
-  muted: { color: theme.colors.muted, fontWeight: "800" },
-  error: { color: "#ff8b8b", fontWeight: "800" },
+  decay: {
+    alignSelf: "flex-end",
+
+    color: "#FFD166",
+    fontSize: 13,
+    fontWeight: "700",
+
+    backgroundColor: "rgba(255, 209, 102, 0.12)",
+
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+
+    borderRadius: 12,
+
+    overflow: "hidden",
+  },
+  sectionTitle: {
+    color: theme.colors.text,
+    fontWeight: "900",
+    fontSize: 16,
+    marginTop: 8,
+  },
+
+  hero: {
+    alignItems: "center",
+    marginBottom: 24,
+    marginTop: 12,
+  },
+
+
+
+  ring: {
+    width: 190,
+    height: 190,
+    borderRadius: 95,
+
+    backgroundColor: "rgba(75,58,119,0.6)",
+
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.35)",
+
+    justifyContent: "center",
+    alignItems: "center",
+
+    overflow: "hidden",
+
+    shadowColor: "#9B5DE5",
+    shadowOpacity: 0.6,
+    shadowRadius: 25,
+
+    elevation: 20,
+  },
+
+
+  innerGlow: {
+    position: "absolute",
+
+    width: "100%",
+    height: "100%",
+
+    backgroundColor: "rgba(255,213,128,0.15)",
+  },
+
+
+  poseImage: {
+    width: 135,
+    height: 135,
+    opacity: 0.35,        
+    tintColor: "rgba(255,255,255,0.6)",
+  },
+
+
+  /* Points */
+  pointsOverlay: {
+    position: "absolute",
+    alignItems: "center",
+    top: 50,   
+  },
+
+
+  points: {
+    fontSize: 60,          
+    fontWeight: "800",     
+    color: "rgba(255,255,255,0.5)",
+
+    textShadowColor: "rgba(0,0,0,0.3)",
+    textShadowRadius: 3,
+  },
+
+
+  pointsLabel: {
+    fontSize: 15,
+    letterSpacing: 1.5,
+    opacity: 0.6,
+    color: "rgba(255,255,255,0.75)"
+  },
+
+  decayWrap: {
+    width: "100%",
+    alignItems: "flex-end",
+    marginBottom: 10,
+  },
+
+  starContainer: {
+    position: "absolute",
+    top: 100,
+    flexDirection: "row",
+    gap: 6,
+  },
+
+  star: {
+    fontSize: 42,
+  },
+
+  dimOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#0F0C1E",
+    zIndex: 100,
+  },
+
+  starWrapper: {
+    position: "absolute",
+    top: 100,
+    flexDirection: "row",
+    gap: 8,
+    zIndex: 20,
+  },
+
+
+
+
 });
