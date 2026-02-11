@@ -1,10 +1,11 @@
-import React, { useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
-import { Button, Input } from "@ant-design/react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import { StyleSheet, Text, View, Pressable } from "react-native";
+import { Button, Input } from "antd";
 import Screen from "@/components/Screen";
 import GlassCard from "@/components/GlassCard";
 import { theme } from "@/constants/theme";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { requestEmailOtp, verifyEmailOtp } from "@/services/auth.service";
+import { clearSession, getLastEmail, saveSession } from "@/utils/storage";
 
 const SettingsScreen: React.FC = () => {
   const [stage, setStage] = useState<"default" | "email" | "otp" | "done">(
@@ -14,54 +15,52 @@ const SettingsScreen: React.FC = () => {
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [otpId, setOtpId] = useState<string | null>(null);
+  const [lastEmail, setLastEmail] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const [isLoginFlow, setIsLoginFlow] = useState(false);
+  useEffect(() => {
+    getLastEmail().then((value) => {
+      if (value) setLastEmail(value);
+    });
+  }, []);
 
-  const handleEmailSubmit = async () => {
+  const masked = useMemo(
+    () => (lastEmail ? maskEmail(lastEmail) : ""),
+    [lastEmail]
+  );
+
+  function maskEmail(email: string) {
+    return email.replace(
+      /^(.)(.*)(.@.*)$/,
+      (_, a, b, c) => a + b.replace(/./g, "*") + c
+    );
+  }
+
+  const requestOtp = async (targetEmail: string) => {
+    setLoading(true);
     try {
-      const res = await fetch("http://localhost:8086/v1/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
-
-      const data = await res.json();
-      console.log("Register API:", data);
-
-      if (data.code === 400 && data.message === "Email already taken") {
-        console.log("Email taken, Switching to Login Flow");
-
-        const loginRes = await fetch("http://localhost:8086/v1/auth/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email }),
-        });
-
-        const loginData = await loginRes.json();
-        console.log("Login API:", loginData);
-
-        if (loginRes.ok && loginData.otpId) {
-          setIsLoginFlow(true);
-          setOtpId(loginData.otpId);
-          setStage("otp");
-        } else {
-          alert(loginData.message || "Login failed");
-        }
-
-        return;
-      }
-
-      if (res.ok && data.otpId) {
-        setIsLoginFlow(false);
-        setOtpId(data.otpId);
-        setStage("otp");
-      } else {
-        alert(data.message || "Failed to register email");
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Server error");
+      const res = await requestEmailOtp(targetEmail);
+      setEmail(targetEmail);
+      setOtpId(res.otpId);
+      setStage("otp");
+    } catch (err: any) {
+      alert(err?.message || "Failed to request OTP");
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const handleUseLastEmail = () => {
+    if (!lastEmail) return;
+    requestOtp(lastEmail);
+  };
+
+  const handleUseNewEmail = () => {
+    if (!/.+@.+\..+/.test(email)) {
+      alert("Please enter a valid email");
+      return;
+    }
+    requestOtp(email);
   };
 
   const handleOtpVerify = async () => {
@@ -69,47 +68,34 @@ const SettingsScreen: React.FC = () => {
       alert("Missing otpId");
       return;
     }
+    if (!/^\d{4,6}$/.test(otp)) {
+      alert("Enter valid OTP");
+      return;
+    }
 
-    const endpoint = isLoginFlow
-      ? "http://localhost:8086/v1/auth/verify-login-email"
-      : "http://localhost:8086/v1/auth/verify-register-email";
-
+    setLoading(true);
     try {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          otpId,
-          otp: Number(otp),
-        }),
+      const res = await verifyEmailOtp({ otpId, otp: Number(otp) });
+
+      await saveSession({
+        token: res.token,
+        email,
       });
 
-      const data = await res.json();
-      console.log("Verify Response:", data);
-
-      if (res.ok) {
-        await AsyncStorage.setItem("access_token", data.token);
-        await AsyncStorage.setItem("user_id", data.user.id);
-        await AsyncStorage.setItem("is_logged_in", "true");
-
-        setStage("done");
-      } else {
-        alert(data.message || "OTP verification failed");
-      }
-    } catch (err) {
-      console.error(err);
+      setStage("done");
+    } catch (err: any) {
+      alert(err?.message || "OTP verification failed");
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleLogout = async () => {
-    await AsyncStorage.removeItem("access_token");
-    await AsyncStorage.removeItem("is_logged_in");
-
+    await clearSession();
     setEmail("");
     setOtp("");
     setOtpId(null);
     setStage("default");
-    setIsLoginFlow(false);
   };
 
   return (
@@ -131,26 +117,39 @@ const SettingsScreen: React.FC = () => {
             )}
 
             {stage === "email" && (
-              <View style={styles.inputBlock}>
-                <Text style={styles.label}>Enter Email</Text>
+              <>
+                {lastEmail && (
+                  <Pressable
+                    style={styles.ctaCard}
+                    onPress={handleUseLastEmail}
+                  >
+                    <Text style={styles.ctaTitle}>Continue as</Text>
+                    <Text style={styles.ctaEmail}>{masked}</Text>
+                  </Pressable>
+                )}
 
-                <Input
-                  placeholder="you@example.com"
-                  size="large"
-                  style={styles.input}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
+                <View style={styles.inputBlock}>
+                  <Text style={styles.orLabel}>OR</Text>
+                  <Text style={styles.label}>Enter Email</Text>
 
-                <Button
-                  type="primary"
-                  size="large"
-                  style={styles.mainButton}
-                  onClick={handleEmailSubmit}
-                >
-                  Sign In
-                </Button>
-              </View>
+                  <Input
+                    placeholder="you@example.com"
+                    size="large"
+                    style={styles.input}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+
+                  <Button
+                    type="primary"
+                    size="large"
+                    style={styles.mainButton}
+                    onClick={handleUseNewEmail}
+                  >
+                    Sign In
+                  </Button>
+                </View>
+              </>
             )}
 
             {stage === "otp" && (
@@ -181,7 +180,7 @@ const SettingsScreen: React.FC = () => {
               <Button
                 type="primary"
                 size="large"
-                style={styles.mainButton}
+                style={{ ...styles.mainButton, backgroundColor: "green" }}
                 onClick={handleLogout}
               >
                 Logout
@@ -197,11 +196,7 @@ const SettingsScreen: React.FC = () => {
 export default SettingsScreen;
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    paddingTop: 6,
-  },
-
+  container: { flex: 1, paddingTop: 6 },
   title: {
     color: theme.colors.text,
     fontWeight: "900",
@@ -209,23 +204,16 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: "center",
   },
-
-  card: {
-    marginTop: 16,
-    padding: 20,
-    borderRadius: 16,
-  },
-
+  card: { marginTop: 16, padding: 20, borderRadius: 16 },
   content: { gap: 16 },
-
   inputBlock: { gap: 12 },
-
-  label: {
+  label: { color: theme.colors.text, fontWeight: "900", fontSize: 16 },
+  orLabel: {
     color: theme.colors.text,
     fontWeight: "900",
     fontSize: 16,
+    textAlign: "center",
   },
-
   input: {
     paddingVertical: 10,
     borderRadius: 12,
@@ -234,12 +222,28 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     color: "#ffffff",
   },
-
   mainButton: {
     backgroundColor: "#4a90e2",
     borderColor: "#4a90e2",
     borderRadius: 30,
     height: 48,
     fontSize: 18,
+  },
+
+  ctaCard: {
+    width: "100%",
+    paddingVertical: 18,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderColor: theme.colors.border,
+    borderWidth: 1,
+    marginBottom: 20,
+  },
+  ctaTitle: { color: theme.colors.muted, fontSize: 14, marginLeft: 4 },
+  ctaEmail: {
+    color: theme.colors.text,
+    fontSize: 18,
+    fontWeight: "900",
+    marginLeft: 4,
   },
 });
