@@ -150,8 +150,7 @@ export default function HomeScreen() {
 
 
           </View>
-
-         
+        
         </GlassCard>
       </ScrollView>
 

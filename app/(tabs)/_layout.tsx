@@ -3,7 +3,7 @@ import { Tabs } from "expo-router";
 import { BlurView } from "expo-blur";
 import { AntDesign } from "@expo/vector-icons";
 import { theme } from "../../constants/theme";
-import { Platform } from "react-native";
+
 
 export default function TabLayout() {
   return (

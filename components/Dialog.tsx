@@ -31,7 +31,6 @@ export default function Dialog({
         <Pressable style={styles.modalCard} onPress={() => { }}>
           <Text style={styles.title}>{title}</Text>
 
-
           <View style={styles.actions}>
         <Button
           type="ghost"
