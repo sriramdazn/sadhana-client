@@ -6,135 +6,132 @@ import Screen from "@/components/Screen";
 import Rows from "@/components/Rows";
 import { getSadhanas } from "@/services/SadhanaService";
 import Dialog from "@/components/Dialog";
-
 import StarAnimation from "@/components/StarAnimation";
-
-
-
-
-type Sadhana = {
-  id: string;
-  name: string;
-  points: number;
-  isActive: boolean;
-};
-
+import { Sadhana } from "../features/sadhana/types";
+import { useJourneyStore } from "@/hooks/useJourneyStore";
+import { todayLabel } from "@/utils/todayDate";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { COMPLETED_KEY, TOTAL_POINTS_KEY} from "@/constants/constant";
+import { useIsFocused } from "@react-navigation/native";
 
 export default function HomeScreen() {
   const [sadhanas, setSadhanas] = useState<Sadhana[]>([]);
   const [showConfirm, setShowConfirm] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Sadhana | null>(null);
   const scrollRef = useRef<ScrollView>(null);
-  const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
+  const [completedIds, setCompletedIds] = useState<Record<string, boolean>>({});
   const [dailyDecay] = useState(-50);
   const [totalPoints, setTotalPoints] = useState(350);
-
   const [showStars, setShowStars] = useState(false);
+  const { addItem } = useJourneyStore();
+  const isFocused = useIsFocused();
 
   const handleAdd = (item: Sadhana) => {
-    if (completedIds.has(item.id)) return;
-
+    if (completedIds[item.id]) return;
     setSelectedItem(item);
     setShowConfirm(true);
   };
 
-  const confirmAdd = () => {
+  const confirmAddToJourney = async () => {
     if (!selectedItem) return;
   
-    // Scroll to top
-    scrollRef.current?.scrollTo({
-      y: 0,
-      animated: true,
+    const nextCompleted = { ...completedIds, [selectedItem.id]: true };
+    setCompletedIds(nextCompleted);
+    await AsyncStorage.setItem(COMPLETED_KEY, JSON.stringify(nextCompleted));
+  
+    const nextPoints = totalPoints + selectedItem.points;
+    setTotalPoints(nextPoints);
+    await AsyncStorage.setItem(TOTAL_POINTS_KEY, String(nextPoints));
+  
+    // add sadhana to journey 
+    await addItem(todayLabel(), {
+      id: `${Date.now()}_${selectedItem.id}`,
+      title: selectedItem.name,
+      points: selectedItem.points,
+      sadhanaId: selectedItem.id,
     });
   
-    // Start animation
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
     setShowStars(true);
-  
-    // Close dialog
     setShowConfirm(false);
   };
+
+  useEffect(() => {
+    const loadHomeState = async () => {
+      try {
+        const savedSadhana = await AsyncStorage.getItem(COMPLETED_KEY);
+        if (savedSadhana) setCompletedIds(JSON.parse(savedSadhana));
   
+        const updatedPoints = await AsyncStorage.getItem(TOTAL_POINTS_KEY);
+        if (updatedPoints) {
+          const n = Number(updatedPoints);
+          if (!Number.isNaN(n)) setTotalPoints(n);
+        }
+      } catch (e) {
+        console.log("Error loading home state", e);
+      }
+    };
+  
+    loadHomeState();
+  }, []);
 
-
-
+  useEffect(() => {
+    if (!isFocused) return;
+    (async () => {
+      const raw = await AsyncStorage.getItem(COMPLETED_KEY);
+      if (raw) setCompletedIds(JSON.parse(raw));
+      else setCompletedIds({});
+      const pRaw = await AsyncStorage.getItem(TOTAL_POINTS_KEY);
+      if (pRaw) setTotalPoints(Number(pRaw));
+    })();
+  }, [isFocused]);
+  
+  
   useEffect(() => {
     const loadSadhanas = async () => {
       try {
-   
-
       //get sadhana
         const data: Sadhana[] = await getSadhanas();
-
         const activeData = data.filter(item => item.isActive);
-
         setSadhanas(activeData);
       } catch (err) {
         console.log("Error loading sadhanas");
       }
     };
-
     loadSadhanas();
   }, []);
-
 
   return (
     <Screen>
       <StarAnimation
         visible={showStars}
         onComplete={() => {
-          if (!selectedItem) return;
-
-          const item = selectedItem;
-
-          // Update points AFTER animation
-          setTotalPoints((prev) => prev + item.points);
-          setCompletedIds((prev) => new Set(prev).add(item.id));
-
           setShowStars(false);
           setSelectedItem(null);
         }}
       />
 
-
       <ScrollView ref={scrollRef} contentContainerStyle={{ paddingBottom: 28 }} showsVerticalScrollIndicator={false}>
         <View style={styles.decayWrap}>
           <Text style={styles.decay}>Daily Decay: {dailyDecay}</Text>
         </View>
-
         <View style={styles.hero}>
-
-
           <View style={styles.ring}>
-
             <View style={styles.innerGlow} />
-
             <Image
               source={require("@/assets/yoga.png")}
               style={styles.poseImage}
               resizeMode="contain"
             />
-
-
-
-
             <View style={styles.pointsOverlay}>
               <Text style={styles.points}>{totalPoints}</Text>
               <Text style={styles.pointsLabel}>Points</Text>
             </View>
-
           </View>
-
         </View>
-
-
-
-
-        <Text style={styles.decay}>Daily Decay: {dailyDecay}</Text>
         <Text style={styles.sectionTitle}>Today’s Sadhanas</Text>
-
         <GlassCard style={{ marginTop: 10 }}>
           <View style={{ gap: 12 }}>
-
             {sadhanas.map((item, index) => (
               <Rows
                 key={item.id}
@@ -143,17 +140,13 @@ export default function HomeScreen() {
                 subtitle="Daily Practice"
                 points={item.points}
                 action="done"
-                isDone={completedIds.has(item.id)}
+                isDone={!!completedIds[item.id]}
                 onAdd={() => handleAdd(item)}
               />
             ))}
-
-
-          </View>
-        
+          </View> 
         </GlassCard>
       </ScrollView>
-
       <Dialog
         visible={showConfirm}
         title="Are you sure you did this sadhana?"
@@ -161,12 +154,11 @@ export default function HomeScreen() {
           setShowConfirm(false);
           setSelectedItem(null);
         }}
-        onConfirm={confirmAdd}
+        onConfirm={confirmAddToJourney}
         cancelText="Cancel"
         confirmText="Yes"
         confirmType="primary"
       />
-
     </Screen>
   );
 }

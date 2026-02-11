@@ -34,3 +34,22 @@ export type JourneyService = {
   isLoggedIn?: boolean;
   accessToken?: string | null;
 };
+
+export type Sadhana = {
+  id: string;
+  name: string;
+  points: number;
+  isActive: boolean;
+};
+
+export type LogItem = { 
+  id: string; 
+  title: string; 
+  points: number; 
+  sadhanaId: string 
+};
+
+export type DayLogs = { 
+  dayLabel: string; 
+  items: LogItem[] 
+};

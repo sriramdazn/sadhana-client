@@ -46,7 +46,7 @@ export function useGuestSyncToBackend() {
         return;
       }
 
-      await postJson(`${API_BASE_URL}/v1/sadhana/...`, accessToken, {
+      await postJson(`${API_BASE_URL}/v1/sadhana/sync`, accessToken, {
         // home,
         journey,
         source: "guest",

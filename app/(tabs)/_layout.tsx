@@ -1,8 +1,6 @@
-import React from "react";
 import { Tabs } from "expo-router";
 import { BlurView } from "expo-blur";
 import { AntDesign } from "@expo/vector-icons";
-import { theme } from "../../constants/theme";
 
 
 export default function TabLayout() {
@@ -12,35 +10,20 @@ export default function TabLayout() {
         headerShown: false,
         tabBarActiveTintColor: "#fff",
         tabBarInactiveTintColor: "rgba(255,255,255,0.5)",
-
         tabBarStyle: {
           position: "absolute",
-
-          // left: 16,
-          // right: 16,
-          // bottom: 16,
-
           height: 65,
-
           borderRadius: 24,
           borderTopColor: "rgba(25,24,48,0.7)",
-
           backgroundColor: "rgba(25,24,48,0.7)",
-
-         
-
           elevation: 12, 
-
-          
           shadowOpacity: 0.25,
           shadowRadius: 10,
           shadowOffset: { width: 0, height: 6 },
         },
-
         tabBarItemStyle: {
           paddingVertical: 6,
         },
-
         tabBarLabelStyle: {
           fontSize: 9,
           fontWeight: "600",

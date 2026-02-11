@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import { useCallback, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { useJourneyStore } from "@/hooks/useJourneyStore";
@@ -6,11 +6,13 @@ import Screen from "@/components/Screen";
 import GlassCard from "@/components/GlassCard";
 import Dialog from "@/components/Dialog";
 import { theme } from "@/constants/theme";
+import { todayLabel } from "@/utils/todayDate";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { COMPLETED_KEY, TOTAL_POINTS_KEY } from "@/constants/constant";
 
 export default function JourneyScreen() {
   const { days, loading, load, deleteItem } = useJourneyStore();
-
-  const [deleteTarget, setDeleteTarget] = useState<{ day: string; id: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ day: string; id: string; sadhanaId: string; points: number;} | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -18,14 +20,31 @@ export default function JourneyScreen() {
     }, [load])
   );
 
-  const openDeleteDialog = (payload: { day: string; id: string }) => setDeleteTarget(payload);
+  const openDeleteDialog = (payload: { day: string; id: string; sadhanaId: string; points: number; }) => setDeleteTarget(payload);
   const closeDeleteDialog = () => setDeleteTarget(null);
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
-    const { day, id } = deleteTarget;
+    const { day, id, sadhanaId, points } = deleteTarget;
     setDeleteTarget(null);
     await deleteItem(day, id);
+  
+    //deleting today's entry, remove tick in Home
+    if (day === todayLabel()) {
+      const raw = await AsyncStorage.getItem(COMPLETED_KEY);
+      const completed = raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
+  
+      if (completed[sadhanaId]) {
+        delete completed[sadhanaId];
+        await AsyncStorage.setItem(COMPLETED_KEY, JSON.stringify(completed));
+      }
+  
+      //reduce points when delete sadhana
+      const pRaw = await AsyncStorage.getItem(TOTAL_POINTS_KEY);
+      const currentPoints = pRaw ? Number(pRaw) : 350;
+      const nextPoints = Math.max(0, currentPoints - points);
+      await AsyncStorage.setItem(TOTAL_POINTS_KEY, String(nextPoints));
+    }
   };
 
   return (
@@ -43,10 +62,10 @@ export default function JourneyScreen() {
                   <Text style={styles.dayLabel}>{day.dayLabel}</Text>
 
                   <View style={{ gap: 10, marginTop: 10 }}>
-                    {day.items.map((item) => (
+                    {day.items.map((item: any) => (
                       <Pressable
                         key={item.id}
-                        onPress={() => openDeleteDialog({ day: day.dayLabel, id: item.id })}
+                        onPress={() => openDeleteDialog({ day: day.dayLabel, id: item.id, sadhanaId: item.sadhanaId, points: item.points })}
                         style={styles.logRow}
                       >
                         <Text style={styles.logText}>{item.title}</Text>

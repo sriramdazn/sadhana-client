@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
 import { createJourneyService, type DayLogs, type LogItem } from "@services/journeyService";
-import { JourneyService } from "@/app/features/sadhana/types";
 import { useAuthStatus } from "./useAuthStatus";
 
 export function useJourneyStore() {

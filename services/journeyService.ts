@@ -1,11 +1,7 @@
-import { JourneyService } from "@/app/features/sadhana/types";
+import { JourneyService, LogItem, DayLogs } from "@/app/features/sadhana/types";
 import { API_BASE_URL } from "@/constants/api.constant";
+import { JOURNEY_KEY } from "@/constants/constant";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
-export type LogItem = { id: string; title: string; points: number };
-export type DayLogs = { dayLabel: string; items: LogItem[] };
-
-const JOURNEY_KEY = "sadhana_journey_v1";
 
 async function readLocalJourney(): Promise<DayLogs[]> {
   const raw = await AsyncStorage.getItem(JOURNEY_KEY);
@@ -63,7 +59,7 @@ export function createJourneyService({
   return {
     async load(): Promise<DayLogs[]> {
       if (canUseRemote) {
-        return api<DayLogs[]>(`${API_BASE_URL}/v1/journey`, "GET", accessToken as string);
+        return api<DayLogs[]>(`${API_BASE_URL}/v1/sadana-tracker/`, "GET", accessToken as string);
       }
       return readLocalJourney();
     },
@@ -71,7 +67,7 @@ export function createJourneyService({
     async addItem(dayLabel: string, item: LogItem): Promise<DayLogs[]> {
       if (canUseRemote) {
         return api<DayLogs[]>(
-          `${API_BASE_URL}/v1/journey/item`,
+          `${API_BASE_URL}/v1/sadana-tracker/`,
           "POST",
           accessToken as string,
           { dayLabel, item }
@@ -79,6 +75,9 @@ export function createJourneyService({
       }
 
       const prev = await readLocalJourney();
+      const day = prev.find((d) => d.dayLabel === dayLabel);
+      const alreadyExists = day?.items?.some((x) => x.sadhanaId === item.sadhanaId);
+      if (alreadyExists) return prev;
       const next = addLocalItem(prev, dayLabel, item);
       await writeLocalJourney(next);
       return next;
@@ -87,7 +86,7 @@ export function createJourneyService({
     async deleteItem(dayLabel: string, itemId: string): Promise<DayLogs[]> {
       if (canUseRemote) {
         return api<DayLogs[]>(
-          `${API_BASE_URL}/v1/journey/item`,
+          `${API_BASE_URL}/v1/sadana-tracker/`,
           "DELETE",
           accessToken as string,
           { dayLabel, itemId }
