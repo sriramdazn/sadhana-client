@@ -23,9 +23,9 @@ export type JourneyState = {
 };
 
 const KEYS = {
-  home: "sadhana_home_v1",
-  journey: "sadhana_journey_v1",
-  syncedForUser: (userId: string) => `sadhana_guest_synced_v1:${userId}`,
+  home: "sadhana_home",
+  journey: "sadhana_journey",
+  syncedForUser: (userId: string) => `sadhana_guest_synced:${userId}`,
 };
 
 async function readJson<T>(key: string): Promise<T | null> {

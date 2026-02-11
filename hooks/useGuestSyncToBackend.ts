@@ -1,12 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useGuestStorage } from "./useGuestStorage";
-
-type Args = {
-  isLoggedIn: boolean;
-  userId: string | null;
-  accessToken: string | null; // token
-  apiBaseUrl: string; //  api domainn
-};
+import { useAuthStatus } from "./useAuthStatus";
+import { API_BASE_URL } from "@/constants/api.constant";
 
 async function postJson(url: string, token: string, body: unknown) {
   const res = await fetch(url, {
@@ -24,13 +19,9 @@ async function postJson(url: string, token: string, body: unknown) {
   }
 }
 
-export function useGuestSyncToBackend({
-  isLoggedIn,
-  userId,
-  accessToken,
-  apiBaseUrl,
-}: Args) {
+export function useGuestSyncToBackend() {
   const didRunRef = useRef(false);
+  const { userId, isLoggedIn, accessToken } = useAuthStatus();
 
   useEffect(() => {
     if (!isLoggedIn) return;
@@ -55,7 +46,7 @@ export function useGuestSyncToBackend({
         return;
       }
 
-      await postJson(`${apiBaseUrl}/v1/sadhana/...`, accessToken, {
+      await postJson(`${API_BASE_URL}/v1/sadhana/...`, accessToken, {
         // home,
         journey,
         source: "guest",
@@ -69,5 +60,5 @@ export function useGuestSyncToBackend({
       // If sync fails, keep guest data
       didRunRef.current = false;
     });
-  }, [isLoggedIn, userId, accessToken, apiBaseUrl]);
+  }, [isLoggedIn, userId, accessToken, API_BASE_URL]);
 }

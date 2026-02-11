@@ -6,10 +6,9 @@ import Screen from "@/components/Screen";
 import GlassCard from "@/components/GlassCard";
 import Dialog from "@/components/Dialog";
 import { theme } from "@/constants/theme";
+import { useAuthStatus } from "@/hooks/useAuthStatus";
 
-// TODO: replace with real auth values later
-const isLoggedIn = false;
-const accessToken: string | null = null;
+const { isLoggedIn, accessToken } = useAuthStatus();
 
 export default function JourneyScreen() {
   const { days, loading, load, deleteItem } = useJourneyStore({ isLoggedIn, accessToken });

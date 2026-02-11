@@ -1,12 +1,12 @@
+import { API_BASE_URL } from "@/constants/api.constant";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export type LogItem = { id: string; title: string; points: number };
 export type DayLogs = { dayLabel: string; items: LogItem[] };
 
-type CreateJourneyServiceArgs = {
+type JourneyServiceArgs = {
   isLoggedIn?: boolean;
   accessToken?: string | null;
-  apiBaseUrl?: string;
 };
 
 const JOURNEY_KEY = "sadhana_journey_v1";
@@ -61,14 +61,13 @@ function deleteLocalItem(prev: DayLogs[], dayLabel: string, itemId: string): Day
 export function createJourneyService({
   isLoggedIn = false,
   accessToken = null,
-  apiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL ?? "",
-}: CreateJourneyServiceArgs = {}) {
-  const canUseRemote = isLoggedIn && !!accessToken && !!apiBaseUrl;
+}: JourneyServiceArgs = {}) {
+  const canUseRemote = isLoggedIn && !!accessToken && !!API_BASE_URL;
 
   return {
     async load(): Promise<DayLogs[]> {
       if (canUseRemote) {
-        return api<DayLogs[]>(`${apiBaseUrl}/v1/journey`, "GET", accessToken as string);
+        return api<DayLogs[]>(`${API_BASE_URL}/v1/journey`, "GET", accessToken as string);
       }
       return readLocalJourney();
     },
@@ -76,7 +75,7 @@ export function createJourneyService({
     async addItem(dayLabel: string, item: LogItem): Promise<DayLogs[]> {
       if (canUseRemote) {
         return api<DayLogs[]>(
-          `${apiBaseUrl}/v1/journey/item`,
+          `${API_BASE_URL}/v1/journey/item`,
           "POST",
           accessToken as string,
           { dayLabel, item }
@@ -92,7 +91,7 @@ export function createJourneyService({
     async deleteItem(dayLabel: string, itemId: string): Promise<DayLogs[]> {
       if (canUseRemote) {
         return api<DayLogs[]>(
-          `${apiBaseUrl}/v1/journey/item`,
+          `${API_BASE_URL}/v1/journey/item`,
           "DELETE",
           accessToken as string,
           { dayLabel, itemId }

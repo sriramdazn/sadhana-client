@@ -1,19 +1,15 @@
 import { useCallback, useMemo, useState } from "react";
-import { createJourneyService, type DayLogs, type LogItem } from "../services/journeyService";
+import { createJourneyService, type DayLogs, type LogItem } from "@services/journeyService";
+import { useAuthStatus } from "./useAuthStatus";
 
-type Args = {
-  isLoggedIn?: boolean;
-  accessToken?: string | null;
-  apiBaseUrl?: string;
-};
-
-export function useJourneyStore({ isLoggedIn = false, accessToken = null, apiBaseUrl }: Args = {}) {
+export function useJourneyStore() {
   const [days, setDays] = useState<DayLogs[]>([]);
   const [loading, setLoading] = useState(true);
+  const {isLoggedIn, accessToken } = useAuthStatus();
 
   const journeyService = useMemo(() => {
-    return createJourneyService({ isLoggedIn, accessToken, apiBaseUrl });
-  }, [isLoggedIn, accessToken, apiBaseUrl]);
+    return createJourneyService({ isLoggedIn, accessToken });
+  }, [isLoggedIn, accessToken]);
 
   const load = useCallback(async () => {
     setLoading(true);

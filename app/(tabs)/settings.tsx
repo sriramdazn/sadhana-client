@@ -89,6 +89,7 @@ const SettingsScreen: React.FC = () => {
 
       if (res.ok) {
         await AsyncStorage.setItem("access_token", data.token);
+        await AsyncStorage.setItem("user_id", data.user.id);
         await AsyncStorage.setItem("is_logged_in", "true");
 
         setStage("done");
