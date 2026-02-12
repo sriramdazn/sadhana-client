@@ -13,4 +13,8 @@ export function todayLabel() {
     const d = new Date();
     const day = d.getDate();
     return `${day}${ordinal(day)} ${MONTHS[d.getMonth()]}`;
-  }
+}
+
+export function todayIso() {
+  return new Date().toISOString().slice(0, 10);
+}

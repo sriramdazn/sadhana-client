@@ -1,32 +1,23 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export function useAuthStatus() {
-  const [userId, setUserId] = useState<string | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
 
-  useEffect(() => {
-    const loadStatus = async () => {
-      try {
-        const userToken = await AsyncStorage.getItem("user_id");
-        const token = await AsyncStorage.getItem("access_token");
-        const loggedInFlag = await AsyncStorage.getItem("is_logged_in");
-        
-        setUserId(userToken);
-        setAccessToken(token);
-        setIsLoggedIn(loggedInFlag === "true");
-      } catch (err) {
-        console.error("Error loading auth status", err);
-      }
-    };
+  const refresh = useCallback(async () => {
+    const token = await AsyncStorage.getItem("access_token");
+    const flag = await AsyncStorage.getItem("is_logged_in");
 
-    loadStatus();
+    setAccessToken(token);
+    setIsLoggedIn(flag === "true" && !!token);
+    setReady(true);
   }, []);
 
-  return {
-    userId,
-    isLoggedIn,
-    accessToken,
-  };
+  useEffect(() => {
+    refresh().catch(() => setReady(true));
+  }, [refresh]);
+
+  return { isLoggedIn, accessToken, ready, refresh };
 }

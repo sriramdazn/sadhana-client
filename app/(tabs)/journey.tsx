@@ -9,9 +9,12 @@ import { theme } from "@/constants/theme";
 import { todayLabel } from "@/utils/todayDate";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { COMPLETED_KEY, TOTAL_POINTS_KEY } from "@/constants/constant";
+import { useAuthStatus } from "@/hooks/useAuthStatus";
 
 export default function JourneyScreen() {
-  const { days, loading, load, deleteItem } = useJourneyStore();
+  
+  const { isLoggedIn, accessToken } = useAuthStatus();
+  const { days, loading, load, deleteItem } = useJourneyStore({isLoggedIn, accessToken});
   const [deleteTarget, setDeleteTarget] = useState<{ day: string; id: string; sadhanaId: string; points: number;} | null>(null);
 
   useFocusEffect(
