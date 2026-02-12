@@ -1,4 +1,4 @@
-import { GET_USER_PATH, REQUEST_OTP_PATH, VERIFY_OTP_PATH } from "@/constants/api.constant";
+import { GET_USER_PATH, LOGOUT_USER_PATH, REQUEST_OTP_PATH, VERIFY_OTP_PATH } from "@/constants/api.constant";
 import { http } from "./http";
 
 export type RequestOtpResponse = {
@@ -12,7 +12,16 @@ export type VerifyOtpResponse = {
 };
 
 export type GetUserResponse = {
-  userId: string;
+  id: string;
+  decayPoints: number;
+  email: string,
+  role: string,
+  isEmailVerified: boolean,
+  sadhanaPoints: number,
+};
+
+export type LogoutUserResponse = {
+  message: string
 };
 
 export async function requestEmailOtp(email: string) {
@@ -29,4 +38,31 @@ export async function getUserId(token: string) {
       Authorization: `Bearer ${token}`,
     },
   });
+}
+
+export async function requestLogout(token: string) {
+  return http.post<LogoutUserResponse>(
+    LOGOUT_USER_PATH,
+    {},
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+}
+
+export async function setDecayPoints(
+  payload: { decayPoints: number },
+  token: string
+) {
+  return http.patch<GetUserResponse>(
+    GET_USER_PATH,
+    payload,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  );
 }

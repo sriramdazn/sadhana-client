@@ -4,7 +4,7 @@ import { Button, Input } from "antd";
 import Screen from "@/components/Screen";
 import GlassCard from "@/components/GlassCard";
 import { theme } from "@/constants/theme";
-import { getUserId, requestEmailOtp, verifyEmailOtp } from "@/services/auth.service";
+import { getUserId, requestEmailOtp, requestLogout, setDecayPoints, verifyEmailOtp } from "@/services/auth.service";
 import { clearSession, getLastEmail, getSession, saveSession } from "@/utils/storage";
 import DailyDecaySlider from "@/components/DailyDecaySlider";
 import { useGuestStorage } from "@/hooks/useGuestStorage";
@@ -27,6 +27,41 @@ const SettingsScreen: React.FC = () => {
       if (value) setLastEmail(value);
     });
   }, []);
+
+  useEffect(() => {
+    const checkSession = async () => {
+      const session = await getSession();
+      console.log(session);
+  
+      if (session?.token && session.userId) {
+        setStage("done");
+      } else {
+        setStage("default");
+      }
+    };
+  
+    checkSession();
+   
+  }, []);
+
+
+  const setPoints = async (value: number) => {
+    setDailyDecay(value);
+  
+    const session = await getSession();
+    if (!session?.token) {
+      console.log("Not logged in — skip API");
+      return;
+    }
+  
+    try {
+      await setDecayPoints({ decayPoints: value }, session.token);
+    } catch (e) {
+      console.log("Failed to update decay points", e);
+    }
+  };
+  
+
 
   const masked = useMemo(
     () => (lastEmail ? maskEmail(lastEmail) : ""),
@@ -89,7 +124,8 @@ const SettingsScreen: React.FC = () => {
       await saveSession({
         token: res.token,
         email,
-        userId: user
+        userId: user,
+        isLoggedIn: true
       });
 
       setStage("done");
@@ -104,7 +140,6 @@ const handleLogout = async () => {
   try {
     setLoading(true);
 
-
     const session = await getSession();
 
     if (!session?.token) {
@@ -113,28 +148,7 @@ const handleLogout = async () => {
       return;
     }
 
-    const response = await fetch("http://localhost:8086/v1/auth/logout", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session.token}`,
-      },
-      body: JSON.stringify({
-        accessToken: session.token,
-      }),
-    });
-
-    if (!response.ok) {
-      let msg = "Logout failed";
-      try {
-        const err = await response.json();
-        msg = err?.message || msg;
-      } catch {}
-      alert(msg);
-      setLoading(false);
-      return;
-    }
-
+    await requestLogout(session.token);
     await clearSession();
 
     setEmail("");
@@ -154,105 +168,101 @@ const handleLogout = async () => {
         <Text style={styles.title}>Settings</Text>
 
         <GlassCard style={styles.card}>
-          <View style={styles.content}>
-            {stage === "default" && (
-              <>
-                <View style={styles.inputBlock}>
-                  <DailyDecaySlider
-                    value={dailyDecay}
-                    onChange={setDailyDecay}
-                    disabled={loading}
-                  />
-                </View>
+  <View style={styles.content}>
 
-                <Button
-                  type="primary"
-                  size="large"
-                  style={styles.mainButton}
-                  onClick={() => setStage("email")}
-                  loading={loading}
-                >
-                  Save to Cloud
-                </Button>
-              </>
-            )}
 
-            {stage === "email" && (
-              <>
-                {lastEmail && (
-                  <Pressable
-                    style={styles.ctaCard}
-                    onPress={handleUseLastEmail}
-                  >
-                    <Text style={styles.ctaTitle}>Continue as</Text>
-                    <Text style={styles.ctaEmail}>{masked}</Text>
-                  </Pressable>
-                )}
+    <View style={styles.inputBlock}>
+      <DailyDecaySlider
+  value={dailyDecay}
+  onChange={setPoints}
+  disabled={loading}
+/>
+    </View>
 
-                <View style={styles.inputBlock}>
-                  <Text style={styles.orLabel}>OR</Text>
-                  <Text style={styles.label}>Enter Email</Text>
+    {stage === "default" && (
+      <Button
+        type="primary"
+        size="large"
+        style={styles.mainButton}
+        onClick={() => setStage("email")}
+        loading={loading}
+      >
+        Save to Cloud
+      </Button>
+    )}
 
-                  <Input
-                    placeholder="you@example.com"
-                    size="large"
-                    style={styles.input}
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    disabled={loading}
-                  />
+    {stage === "email" && (
+      <>
+        {lastEmail && (
+          <Pressable style={styles.ctaCard} onPress={handleUseLastEmail}>
+            <Text style={styles.ctaTitle}>Continue as</Text>
+            <Text style={styles.ctaEmail}>{masked}</Text>
+          </Pressable>
+        )}
 
-                  <Button
-                    type="primary"
-                    size="large"
-                    style={styles.mainButton}
-                    onClick={handleUseNewEmail}
-                    loading={loading}
-                  >
-                    Sign In
-                  </Button>
-                </View>
-              </>
-            )}
+        <View style={styles.inputBlock}>
+          <Text style={styles.label}>Enter Email</Text>
 
-            {stage === "otp" && (
-              <View style={styles.inputBlock}>
-                <Text style={styles.label}>Enter OTP</Text>
+          <Input
+            placeholder="you@example.com"
+            size="large"
+            style={styles.input}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            disabled={loading}
+          />
 
-                <Input
-                  placeholder="Enter 6-digit OTP"
-                  maxLength={6}
-                  size="large"
-                  style={styles.input}
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value)}
-                  disabled={loading}
-                />
+          <Button
+            type="primary"
+            size="large"
+            style={styles.mainButton}
+            onClick={handleUseNewEmail}
+            loading={loading}
+          >
+            Sign In
+          </Button>
+        </View>
+      </>
+    )}
 
-                <Button
-                  type="primary"
-                  size="large"
-                  style={styles.mainButton}
-                  onClick={handleOtpVerify}
-                  loading={loading}
-                >
-                  Verify
-                </Button>
-              </View>
-            )}
+    {stage === "otp" && (
+      <View style={styles.inputBlock}>
+        <Text style={styles.label}>Enter OTP</Text>
 
-            {stage === "done" && (
-              <Button
-                type="primary"
-                size="large"
-                style={{ ...styles.mainButton, backgroundColor: "green" }}
-                onClick={handleLogout}
-              >
-                Logout
-              </Button>
-            )}
-          </View>
-        </GlassCard>
+        <Input
+          placeholder="Enter 6-digit OTP"
+          maxLength={6}
+          size="large"
+          style={styles.input}
+          value={otp}
+          onChange={(e) => setOtp(e.target.value)}
+          disabled={loading}
+        />
+
+        <Button
+          type="primary"
+          size="large"
+          style={styles.mainButton}
+          onClick={handleOtpVerify}
+          loading={loading}
+        >
+          Verify
+        </Button>
+      </View>
+    )}
+
+    {stage === "done" && (
+      <Button
+        type="primary"
+        size="large"
+        style={styles.mainButton}
+        onClick={handleLogout}
+      >
+        Logout
+      </Button>
+    )}
+  </View>
+</GlassCard>
       </View>
     </Screen>
   );
@@ -288,11 +298,10 @@ const styles = StyleSheet.create({
     color: "#ffffff",
   },
   mainButton: {
-    backgroundColor: "#4a90e2",
-    borderColor: "#4a90e2",
     borderRadius: 30,
     height: 48,
     fontSize: 18,
+    backgroundColor: "rgba(155, 93, 229, 0.95)"
   },
 
   ctaCard: {

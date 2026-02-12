@@ -65,4 +65,6 @@ export const http = {
   get: <T = any>(path: string, init?: RequestInit) => request<T>(path, { ...init, method: "GET" }),
   post: <T = any>(path: string, json?: Json, init?: RequestInit) =>
     request<T>(path, { ...init, method: "POST", json }),
+  patch: <T = any>(path: string, json?: Json, init?: RequestInit) =>
+    request<T>(path, { ...init, method: "PATCH", json }),
 };
