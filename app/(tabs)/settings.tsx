@@ -26,6 +26,8 @@ const SettingsScreen: React.FC = () => {
     getLastEmail().then((value) => {
       if (value) setLastEmail(value);
     });
+    const {decayPoints} = getSession();
+    setDailyDecay(decayPoints);
   }, []);
 
   useEffect(() => {
@@ -56,6 +58,9 @@ const SettingsScreen: React.FC = () => {
   
     try {
       await setDecayPoints({ decayPoints: value }, session.token);
+      await saveSession({
+        decayPoints: value
+      })
     } catch (e) {
       console.log("Failed to update decay points", e);
     }
