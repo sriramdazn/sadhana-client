@@ -18,18 +18,18 @@ import { useIsFocused } from "@react-navigation/native";
 import { Sadhana } from "@/components/types/types";
 import { getSession } from "@/utils/storage";
 import { resetTicksIfNewDay } from "@/services/reset";
+import { addUserPoints, getUserPoints } from "@/services/UserService";
 
 const DAILY_DECAY = -50;
-const DEFAULT_POINTS = 350;
 
 export default function HomeScreen() {
   const [sadhanas, setSadhanas] = useState<Sadhana[]>([]);
   const [completedIds, setCompletedIds] = useState<Record<string, boolean>>({});
-  const [totalPoints, setTotalPoints] = useState(DEFAULT_POINTS);
 
   const [showConfirm, setShowConfirm] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Sadhana | null>(null);
   const [showStars, setShowStars] = useState(false);
+  const [localPoints, setLocalPoints] = useState<number>(0);
 
   const scrollRef = useRef<ScrollView>(null);
   const isFocused = useIsFocused();
@@ -38,6 +38,33 @@ export default function HomeScreen() {
   const { isLoggedIn, accessToken, userId } = useAuthStatus();
   console.log("AUTH (Home):", { isLoggedIn, hasToken: !!accessToken, userId });
   const { addItem } = useJourneyStore({ isLoggedIn, accessToken });
+
+  useEffect(() => {
+    if (!isLoggedIn || !accessToken) return;
+  
+    (async () => {
+      try {
+        const data = await getUserPoints(accessToken);
+  
+        if (data?.sadhanaPoints !== undefined) {
+          // Save API points to local storage
+          await AsyncStorage.setItem(
+            TOTAL_POINTS_KEY,
+            String(data.sadhanaPoints)
+          );
+
+          console.log(await AsyncStorage.getItem(TOTAL_POINTS_KEY))
+  
+          // Update UI
+          setLocalPoints(data.sadhanaPoints);
+        }
+      } catch (e) {
+        console.log("Failed to sync points from API", e);
+      }
+    })();
+  }, [isLoggedIn, accessToken]);
+  
+
 
   useEffect(() => {
     (async () => {
@@ -56,11 +83,6 @@ export default function HomeScreen() {
         if (raw) setCompletedIds(JSON.parse(raw));
       }
 
-      const pointsRaw = await AsyncStorage.getItem(TOTAL_POINTS_KEY);
-      if (pointsRaw) {
-        const n = Number(pointsRaw);
-        if (!Number.isNaN(n)) setTotalPoints(n);
-      }
 
       // load sadhanas
       const data = await getSadhanas();
@@ -71,12 +93,19 @@ export default function HomeScreen() {
   useEffect(() => {
     if (!isFocused) return;
     // after journey delete home refresh to get updated tick & points
-    (async () => {
-      const pRaw = await AsyncStorage.getItem(TOTAL_POINTS_KEY);
-      if (pRaw) setTotalPoints(Number(pRaw));
-  
+    (async () => {   
+
+      // reload completed (already working)
       const cRaw = await AsyncStorage.getItem(COMPLETED_KEY);
       setCompletedIds(cRaw ? JSON.parse(cRaw) : {});
+
+      // reload total points
+      const pRaw = await AsyncStorage.getItem(TOTAL_POINTS_KEY);
+
+      if (pRaw !== null) {
+        setLocalPoints(Number(pRaw));
+      }
+
     })();
   }, [isFocused]);
 
@@ -89,16 +118,43 @@ export default function HomeScreen() {
   const confirmAddToJourney = async () => {
     if (!selectedItem) return;
 
-    const nextCompleted = { ...completedIds, [selectedItem.id]: true };
-    const nextPoints = totalPoints + selectedItem.points;
+    try {
+      const next = localPoints + selectedItem.points;
+
+      setLocalPoints(next);
+
+      await AsyncStorage.setItem(
+        TOTAL_POINTS_KEY,
+        String(next)
+      );
+
+      // Sync API (if logged in)
+      if (isLoggedIn) {
+        try {
+          if (accessToken) {
+            await addUserPoints(
+              accessToken,
+              todayIso(),
+              selectedItem.id
+            );
+          }
+
+        } catch (e) {
+          console.log("API sync failed", e);
+        }
+      }
+      // 2️⃣ Mark completed
+      const nextCompleted = {
+        ...completedIds,
+        [selectedItem.id]: true,
+      };
 
     setCompletedIds(nextCompleted);
-    setTotalPoints(nextPoints);
 
-    await AsyncStorage.multiSet([
-      [COMPLETED_KEY, JSON.stringify(nextCompleted)],
-      [TOTAL_POINTS_KEY, String(nextPoints)],
-    ]);
+    await AsyncStorage.setItem(
+      COMPLETED_KEY,
+      JSON.stringify(nextCompleted)
+    );
 
     // saving the selected sadhana to localstorage(unused user) or call API (logined user)
     await addItem({
@@ -109,6 +165,11 @@ export default function HomeScreen() {
     scrollRef.current?.scrollTo({ y: 0, animated: true });
     setShowStars(true);
     setShowConfirm(false);
+
+    } catch (err) {
+      console.error("Add failed", err);
+      alert("Sync failed. Try again.");
+    }
   };
   
   return (
@@ -136,7 +197,7 @@ export default function HomeScreen() {
             <Image source={require("@/assets/yoga.png")} style={styles.poseImage} resizeMode="contain" />
 
             <View style={styles.pointsOverlay}>
-              <Text style={styles.points}>{totalPoints}</Text>
+              <Text style={styles.points}>{localPoints}</Text>
               <Text style={styles.pointsLabel}>Points</Text>
             </View>
           </View>
