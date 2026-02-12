@@ -4,17 +4,19 @@ import { Slider } from "antd";
 import { FrownOutlined, SmileOutlined } from "@ant-design/icons";
 import { theme } from "@/constants/theme";
 
-
 type Props = {
   value: number;
   onChange: (v: number) => void;
   disabled?: boolean;
+  /** when true, shows a skeleton and defers rendering of the real UI */
+  loading?: boolean;
 };
 
 const DailyDecaySlider: React.FC<Props> = ({
   value,
   onChange,
   disabled = false,
+  loading = false,
 }) => {
   const frownStyle: React.CSSProperties = {
     ...iconBase,
@@ -29,24 +31,32 @@ const DailyDecaySlider: React.FC<Props> = ({
     <View style={styles.container}>
       <Text style={styles.title}>Daily Decay</Text>
 
-      <View style={styles.row}>
-        <FrownOutlined style={frownStyle} />
-
-        <View style={styles.sliderWrapper}>
-          <Slider
-            min={0}
-            max={100}
-            step={25}
-            value={value}
-            onChange={(v) => onChange(Number(v))}
-            disabled={disabled}
-          />
-          <Text style={styles.pointsText}>{value} pts</Text>
+      {loading ? (
+        <View style={styles.row}>
+          <View style={[styles.skeletonIcon]} />
+          <View style={[styles.sliderWrapper]}>
+            <View style={styles.skeletonTrack} />
+            <View style={styles.skeletonText} />
+          </View>
+          <View style={[styles.skeletonIcon]} />
         </View>
-
-        <SmileOutlined style={smileStyle} />
-      </View>
-      
+      ) : (
+        <View style={styles.row}>
+          <FrownOutlined style={frownStyle} />
+          <View style={styles.sliderWrapper}>
+            <Slider
+              min={0}
+              max={100}
+              step={25}
+              value={value}
+              onChange={(v) => onChange(Number(v))}
+              disabled={disabled}
+            />
+            <Text style={styles.pointsText}>{value} pts</Text>
+          </View>
+          <SmileOutlined style={smileStyle} />
+        </View>
+      )}
     </View>
   );
 };
@@ -76,9 +86,30 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
     paddingHorizontal: 12,
+    minHeight: 52,
   },
   sliderWrapper: {
     flex: 1,
+  },
+
+  skeletonIcon: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  skeletonTrack: {
+    height: 22,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    marginBottom: 6,
+  },
+  skeletonText: {
+    height: 14,
+    width: 60,
+    borderRadius: 7,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    alignSelf: "center",
   },
 });
 

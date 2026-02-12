@@ -8,13 +8,19 @@ export const STORAGE_KEYS = {
   decayPoints: "decay_points"
 } as const;
 
-export async function saveSession(opts: { token?: string; email?: string, userId?: string, isLoggedIn?: boolean, decayPoints?: number }) {
+export async function saveSession(opts: {
+  token?: string;
+  email?: string;
+  userId?: string;
+  isLoggedIn?: boolean;
+  decayPoints?: number;
+}) {
   await AsyncStorage.multiSet([
-    [STORAGE_KEYS.accessToken, opts.token],
-    [STORAGE_KEYS.isLoggedIn, opts.isLoggedIn],
+    [STORAGE_KEYS.accessToken, opts.token ?? ""],
+    [STORAGE_KEYS.isLoggedIn, String(opts.isLoggedIn ?? "")],
     [STORAGE_KEYS.userEmail, opts.email ?? ""],
     [STORAGE_KEYS.userId, opts.userId ?? ""],
-    [STORAGE_KEYS.decayPoints, opts.decayPoints]
+    [STORAGE_KEYS.decayPoints, opts.decayPoints?.toString() ?? ""],
   ]);
 }
 
@@ -24,25 +30,26 @@ export async function clearSession() {
     STORAGE_KEYS.isLoggedIn,
     STORAGE_KEYS.userEmail,
     STORAGE_KEYS.userId,
-    STORAGE_KEYS.decayPoints
+    STORAGE_KEYS.decayPoints,
   ]);
 }
 
 export async function getSession() {
-  const [token, email, userId, isLoggedIn, decayPoints] = await AsyncStorage.multiGet([
-    STORAGE_KEYS.accessToken,
-    STORAGE_KEYS.userEmail,
-    STORAGE_KEYS.userId,
-    STORAGE_KEYS.isLoggedIn,
-    STORAGE_KEYS.decayPoints
-  ]);
+  const [[, token], [, email], [, userId], [, isLoggedIn], [, decayPoints]] =
+    await AsyncStorage.multiGet([
+      STORAGE_KEYS.accessToken,
+      STORAGE_KEYS.userEmail,
+      STORAGE_KEYS.userId,
+      STORAGE_KEYS.isLoggedIn,
+      STORAGE_KEYS.decayPoints,
+    ]);
 
   return {
-    token: token?.[1] || null,
-    email: email?.[1] || null,
-    userId: userId?.[1] || null,
-    isLoggedin: isLoggedIn?.[1] || null,
-    decayPoints: decayPoints
+    token: token ?? undefined,
+    email: email ?? undefined,
+    userId: userId ?? undefined,
+    isLoggedIn: isLoggedIn === "true",
+    decayPoints: decayPoints ? Number(decayPoints) : undefined,
   };
 }
 
