@@ -15,6 +15,7 @@ import { useAuthStatus } from "@/hooks/useAuthStatus";
 import { useJourneyStore } from "@/hooks/useJourneyStore";
 import { todayIso, todayLabel } from "@/utils/todayDate";
 import { Sadhana } from "@/app/features/sadhana/types";
+import { useIsFocused } from "@react-navigation/native";
 
 const DAILY_DECAY = -50;
 const DEFAULT_POINTS = 350;
@@ -29,6 +30,7 @@ export default function HomeScreen() {
   const [showStars, setShowStars] = useState(false);
 
   const scrollRef = useRef<ScrollView>(null);
+  const isFocused = useIsFocused();
 
   const { isLoggedIn, accessToken } = useAuthStatus();
   const { addItem } = useJourneyStore({ isLoggedIn, accessToken });
@@ -61,6 +63,18 @@ export default function HomeScreen() {
       setSadhanas(data.filter((item: any) => item.isActive));
     })().catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!isFocused) return;
+    // after journey delete home refresh to get updated tick & points
+    (async () => {
+      const pRaw = await AsyncStorage.getItem(TOTAL_POINTS_KEY);
+      if (pRaw) setTotalPoints(Number(pRaw));
+  
+      const cRaw = await AsyncStorage.getItem(COMPLETED_KEY);
+      setCompletedIds(cRaw ? JSON.parse(cRaw) : {});
+    })();
+  }, [isFocused]);
 
   const handleAdd = (item: Sadhana) => {
     if (completedIds[item.id]) return;
