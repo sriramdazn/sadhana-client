@@ -19,6 +19,8 @@ const SettingsScreen: React.FC = () => {
   );
 
   const [email, setEmail] = useState("");
+
+  
   const [otp, setOtp] = useState("");
   const [otpId, setOtpId] = useState<string | null>(null);
   const [lastEmail, setLastEmail] = useState<string | null>(null);
