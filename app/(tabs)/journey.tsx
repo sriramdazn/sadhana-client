@@ -10,6 +10,7 @@ import { todayLabel } from "@/utils/todayDate";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { COMPLETED_KEY, TOTAL_POINTS_KEY } from "@/constants/constant";
 import { useAuthStatus } from "@/hooks/useAuthStatus";
+import { useGuestSyncToBackend } from "@/hooks/useGuestSyncToBackend";
 
 export default function JourneyScreen() {
   
@@ -22,6 +23,8 @@ export default function JourneyScreen() {
       load();
     }, [load])
   );
+  useGuestSyncToBackend();
+  console.log("days--", days);
 
   const openDeleteDialog = (payload: { day: string; id: string; sadhanaId: string; points: number; }) => setDeleteTarget(payload);
   const closeDeleteDialog = () => setDeleteTarget(null);
@@ -31,7 +34,7 @@ export default function JourneyScreen() {
     const { day, id, sadhanaId, points } = deleteTarget;
     setDeleteTarget(null);
     await deleteItem(day, id);
-  
+     
     //deleting today's entry, remove tick in Home
     if (day === todayLabel()) {
       const raw = await AsyncStorage.getItem(COMPLETED_KEY);

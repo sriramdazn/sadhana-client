@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useGuestStorage } from "./useGuestStorage";
 import { useAuthStatus } from "./useAuthStatus";
 import { API_BASE_URL } from "@/constants/api.constant";
+import { sadanaSyncPayload } from "@/utils/sadhanaPayload";
 
 async function postJson(url: string, token: string, body: unknown) {
   const res = await fetch(url, {
@@ -37,20 +38,21 @@ export function useGuestSyncToBackend() {
       if (alreadySynced) return;
 
       // Read guest data
-      const home = await useGuestStorage.getHome();
       const journey = await useGuestStorage.getJourney();
+      console.log("jounery ",journey)
+      const payload = sadanaSyncPayload({
+        days: journey,
+      });
+      console.log("journey ",payload);
 
       // If nothing to sync, just synced
-      if (!home && !journey) {
+      if (!payload) {
         await useGuestStorage.markSyncedForUser(userId);
         return;
       }
 
       await postJson(`${API_BASE_URL}/v1/sadhana/sync`, accessToken, {
-        // home,
-        journey,
-        source: "guest",
-        clientSyncedAt: Date.now(),
+        payload
       });
 
       // Mark synced & clear guest cache
