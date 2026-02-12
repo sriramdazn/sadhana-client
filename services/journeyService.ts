@@ -6,6 +6,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 async function readLocalJourney(): Promise<LogItem[]> {
   const raw = await AsyncStorage.getItem(JOURNEY_KEY);
   if (!raw) return [];
+  console.log("LOCAL JOURNEY RAW:", await AsyncStorage.getItem(JOURNEY_KEY));
   try {
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? (parsed as LogItem[]) : [];

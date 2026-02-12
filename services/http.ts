@@ -1,6 +1,4 @@
-
-const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, "") || "https://server-04mx.onrender.com";
+import { API_BASE_URL } from "@/constants/api.constant";
 
 type Json = Record<string, any>;
 
