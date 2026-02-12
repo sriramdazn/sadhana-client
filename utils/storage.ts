@@ -7,11 +7,12 @@ export const STORAGE_KEYS = {
   userEmail: "user_email",
 } as const;
 
-export async function saveSession(opts: { token: string; email?: string }) {
+export async function saveSession(opts: { token: string; email?: string, userId?: string }) {
   await AsyncStorage.multiSet([
     [STORAGE_KEYS.accessToken, opts.token],
     [STORAGE_KEYS.isLoggedIn, "true"],
     [STORAGE_KEYS.userEmail, opts.email ?? ""],
+    [STORAGE_KEYS.userId, opts.userId ?? ""]
   ]);
 }
 
@@ -20,7 +21,22 @@ export async function clearSession() {
     STORAGE_KEYS.accessToken,
     STORAGE_KEYS.isLoggedIn,
     STORAGE_KEYS.userEmail,
+    STORAGE_KEYS.userId
   ]);
+}
+
+export async function getSession() {
+  const [token, email, userId] = await AsyncStorage.multiGet([
+    STORAGE_KEYS.accessToken,
+    STORAGE_KEYS.userEmail,
+    STORAGE_KEYS.userId,
+  ]);
+
+  return {
+    token: token?.[1] || null,
+    email: email?.[1] || null,
+    userId: userId?.[1] || null,
+  };
 }
 
 export async function getLastEmail() {

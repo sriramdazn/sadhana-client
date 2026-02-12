@@ -14,8 +14,8 @@ import { getSadhanas } from "@/services/SadhanaService";
 import { useAuthStatus } from "@/hooks/useAuthStatus";
 import { useJourneyStore } from "@/hooks/useJourneyStore";
 import { todayIso, todayLabel } from "@/utils/todayDate";
-import { Sadhana } from "@/app/features/sadhana/types";
 import { useIsFocused } from "@react-navigation/native";
+import { Sadhana } from "@/components/types/types";
 
 const DAILY_DECAY = -50;
 const DEFAULT_POINTS = 350;

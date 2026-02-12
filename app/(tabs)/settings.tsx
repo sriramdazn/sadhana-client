@@ -4,8 +4,11 @@ import { Button, Input } from "antd";
 import Screen from "@/components/Screen";
 import GlassCard from "@/components/GlassCard";
 import { theme } from "@/constants/theme";
-import { requestEmailOtp, verifyEmailOtp } from "@/services/auth.service";
-import { clearSession, getLastEmail, saveSession } from "@/utils/storage";
+import { getUserId, requestEmailOtp, verifyEmailOtp } from "@/services/auth.service";
+import { clearSession, getLastEmail, getSession, saveSession } from "@/utils/storage";
+import DailyDecaySlider from "@/components/DailyDecaySlider";
+import { useGuestStorage } from "@/hooks/useGuestStorage";
+import { sadanaSyncPayload } from "@/utils/sadhanaPayload";
 
 const SettingsScreen: React.FC = () => {
   const [stage, setStage] = useState<"default" | "email" | "otp" | "done">(
@@ -17,6 +20,7 @@ const SettingsScreen: React.FC = () => {
   const [otpId, setOtpId] = useState<string | null>(null);
   const [lastEmail, setLastEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [dailyDecay, setDailyDecay] = useState<number>(50);
 
   useEffect(() => {
     getLastEmail().then((value) => {
@@ -75,11 +79,17 @@ const SettingsScreen: React.FC = () => {
 
     setLoading(true);
     try {
-      const res = await verifyEmailOtp({ otpId, otp: Number(otp) });
-
+      const journey = await useGuestStorage.getJourney();
+      console.log("jounery ",journey)
+      const payload = sadanaSyncPayload({
+        days: journey,
+      });
+      const res = await verifyEmailOtp({ otpId, otp: Number(otp), ...payload });
+      const user = await getUserId(res.token);
       await saveSession({
         token: res.token,
         email,
+        userId: user
       });
 
       setStage("done");
@@ -90,13 +100,53 @@ const SettingsScreen: React.FC = () => {
     }
   };
 
-  const handleLogout = async () => {
+const handleLogout = async () => {
+  try {
+    setLoading(true);
+
+
+    const session = await getSession();
+
+    if (!session?.token) {
+      alert("No active session found");
+      setLoading(false);
+      return;
+    }
+
+    const response = await fetch("http://localhost:8086/v1/auth/logout", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.token}`,
+      },
+      body: JSON.stringify({
+        accessToken: session.token,
+      }),
+    });
+
+    if (!response.ok) {
+      let msg = "Logout failed";
+      try {
+        const err = await response.json();
+        msg = err?.message || msg;
+      } catch {}
+      alert(msg);
+      setLoading(false);
+      return;
+    }
+
     await clearSession();
+
     setEmail("");
     setOtp("");
     setOtpId(null);
     setStage("default");
-  };
+  } catch (err: any) {
+    alert(err?.message || "Logout failed");
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <Screen>
@@ -106,14 +156,25 @@ const SettingsScreen: React.FC = () => {
         <GlassCard style={styles.card}>
           <View style={styles.content}>
             {stage === "default" && (
-              <Button
-                type="primary"
-                size="large"
-                style={styles.mainButton}
-                onClick={() => setStage("email")}
-              >
-                Save to Cloud
-              </Button>
+              <>
+                <View style={styles.inputBlock}>
+                  <DailyDecaySlider
+                    value={dailyDecay}
+                    onChange={setDailyDecay}
+                    disabled={loading}
+                  />
+                </View>
+
+                <Button
+                  type="primary"
+                  size="large"
+                  style={styles.mainButton}
+                  onClick={() => setStage("email")}
+                  loading={loading}
+                >
+                  Save to Cloud
+                </Button>
+              </>
             )}
 
             {stage === "email" && (
@@ -138,6 +199,7 @@ const SettingsScreen: React.FC = () => {
                     style={styles.input}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    disabled={loading}
                   />
 
                   <Button
@@ -145,6 +207,7 @@ const SettingsScreen: React.FC = () => {
                     size="large"
                     style={styles.mainButton}
                     onClick={handleUseNewEmail}
+                    loading={loading}
                   >
                     Sign In
                   </Button>
@@ -163,6 +226,7 @@ const SettingsScreen: React.FC = () => {
                   style={styles.input}
                   value={otp}
                   onChange={(e) => setOtp(e.target.value)}
+                  disabled={loading}
                 />
 
                 <Button
@@ -170,6 +234,7 @@ const SettingsScreen: React.FC = () => {
                   size="large"
                   style={styles.mainButton}
                   onClick={handleOtpVerify}
+                  loading={loading}
                 >
                   Verify
                 </Button>
@@ -206,7 +271,7 @@ const styles = StyleSheet.create({
   },
   card: { marginTop: 16, padding: 20, borderRadius: 16 },
   content: { gap: 16 },
-  inputBlock: { gap: 12 },
+  inputBlock: { gap: 10 },
   label: { color: theme.colors.text, fontWeight: "900", fontSize: 16 },
   orLabel: {
     color: theme.colors.text,
