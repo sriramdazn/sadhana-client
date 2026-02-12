@@ -9,6 +9,9 @@ import { clearSession, getLastEmail, getSession, saveSession } from "@/utils/sto
 import DailyDecaySlider from "@/components/DailyDecaySlider";
 import { useGuestStorage } from "@/hooks/useGuestStorage";
 import { sadanaSyncPayload } from "@/utils/sadhanaPayload";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAuthStatus } from "@/hooks/useAuthStatus";
+import { emitAuthChanged } from "@/utils/authEvents";
 
 const SettingsScreen: React.FC = () => {
   const [stage, setStage] = useState<"default" | "email" | "otp" | "done">(
@@ -21,6 +24,7 @@ const SettingsScreen: React.FC = () => {
   const [lastEmail, setLastEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [dailyDecay, setDailyDecay] = useState<number>(50);
+  const {  refresh } = useAuthStatus();
 
   useEffect(() => {
     getLastEmail().then((value) => {
@@ -116,22 +120,25 @@ const SettingsScreen: React.FC = () => {
       alert("Enter valid OTP");
       return;
     }
-
     setLoading(true);
     try {
-      const journey = await useGuestStorage.getJourney();
-      console.log("jounery ",journey)
-      const payload = sadanaSyncPayload({
-        days: journey,
-      });
+      const journey = (await useGuestStorage.getJourney()) ?? [];
+      const payload = sadanaSyncPayload({ days: journey });
+
       const res = await verifyEmailOtp({ otpId, otp: Number(otp), ...payload });
       const user = await getUserId(res.token);
+
       await saveSession({
         token: res.token,
         email,
-        userId: user,
+        userId: user.id,
         isLoggedIn: true
       });
+
+      emitAuthChanged();
+
+      const check = await AsyncStorage.multiGet(["is_logged_in", "access_token", "user_id"]);
+      console.log("Settings, CHECK:", check);
 
       setStage("done");
     } catch (err: any) {
@@ -144,9 +151,7 @@ const SettingsScreen: React.FC = () => {
 const handleLogout = async () => {
   try {
     setLoading(true);
-
     const session = await getSession();
-
     if (!session?.token) {
       alert("No active session found");
       setLoading(false);
@@ -155,6 +160,7 @@ const handleLogout = async () => {
 
     await requestLogout(session.token);
     await clearSession();
+    emitAuthChanged();
 
     setEmail("");
     setOtp("");

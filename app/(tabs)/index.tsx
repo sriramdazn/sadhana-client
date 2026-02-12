@@ -16,6 +16,8 @@ import { useJourneyStore } from "@/hooks/useJourneyStore";
 import { todayIso, todayLabel } from "@/utils/todayDate";
 import { useIsFocused } from "@react-navigation/native";
 import { Sadhana } from "@/components/types/types";
+import { getSession } from "@/utils/storage";
+import { resetTicksIfNewDay } from "@/services/reset";
 
 const DAILY_DECAY = -50;
 const DEFAULT_POINTS = 350;
@@ -32,7 +34,9 @@ export default function HomeScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const isFocused = useIsFocused();
 
-  const { isLoggedIn, accessToken } = useAuthStatus();
+  // const { isLoggedIn, token} = getSession();
+  const { isLoggedIn, accessToken, userId } = useAuthStatus();
+  console.log("AUTH (Home):", { isLoggedIn, hasToken: !!accessToken, userId });
   const { addItem } = useJourneyStore({ isLoggedIn, accessToken });
 
   useEffect(() => {
@@ -97,11 +101,9 @@ export default function HomeScreen() {
     ]);
 
     // saving the selected sadhana to localstorage(unused user) or call API (logined user)
-    await addItem(todayLabel(), {
-      id: `${Date.now()}_${selectedItem.id}`,
-      title: selectedItem.name,
-      points: selectedItem.points,
-      sadhanaId: selectedItem.id,
+    await addItem({
+      date: todayIso(),
+      sadanaId: selectedItem.id,
     });
 
     scrollRef.current?.scrollTo({ y: 0, animated: true });

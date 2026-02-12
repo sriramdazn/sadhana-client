@@ -1,20 +1,21 @@
-import { JourneyService, LogItem, DayLogs } from "@/app/features/sadhana/types";
+import { JourneyService, LogItem } from "@/components/types/types";
 import { API_BASE_URL } from "@/constants/api.constant";
 import { JOURNEY_KEY } from "@/constants/constant";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-async function readLocalJourney(): Promise<DayLogs[]> {
+async function readLocalJourney(): Promise<LogItem[]> {
   const raw = await AsyncStorage.getItem(JOURNEY_KEY);
   if (!raw) return [];
   try {
-    return JSON.parse(raw) as DayLogs[];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as LogItem[]) : [];
   } catch {
     return [];
   }
 }
 
-async function writeLocalJourney(days: DayLogs[]) {
-  await AsyncStorage.setItem(JOURNEY_KEY, JSON.stringify(days));
+async function writeLocalJourney(logs: LogItem[]) {
+  await AsyncStorage.setItem(JOURNEY_KEY, JSON.stringify(logs));
 }
 
 async function api<T>(url: string, method: string, token: string, body?: unknown): Promise<T> {
@@ -32,69 +33,71 @@ async function api<T>(url: string, method: string, token: string, body?: unknown
     throw new Error(text || `API error ${res.status}`);
   }
 
-  return (await res.json()) as T;
+  const text = await res.text().catch(() => "");
+  return (text ? (JSON.parse(text) as T) : ([] as unknown as T));
 }
 
-function addLocalItem(prev: DayLogs[], dayLabel: string, item: LogItem): DayLogs[] {
-  const found = prev.find((d) => d.dayLabel === dayLabel);
-  if (!found) return [{ dayLabel, items: [item] }, ...prev];
+function addLocalLog(prev: LogItem[], item: LogItem): LogItem[] {
+  // prevent duplicates for same date + sadanaId
+  const exists = prev.some((x) => x.date === item.date && x.sadanaId === item.sadanaId);
+  if (exists) return prev;
 
-  return prev.map((d) => (d.dayLabel === dayLabel ? { ...d, items: [item, ...d.items] } : d));
+  return [item, ...prev];
 }
 
-function deleteLocalItem(prev: DayLogs[], dayLabel: string, itemId: string): DayLogs[] {
-  return prev
-    .map((d) =>
-      d.dayLabel === dayLabel ? { ...d, items: d.items.filter((x) => x.id !== itemId) } : d
-    )
-    .filter((d) => d.items.length > 0);
+function deleteLocalLog(prev: LogItem[], item: LogItem): LogItem[] {
+  return prev.filter((x) => !(x.date === item.date && x.sadanaId === item.sadanaId));
 }
 
 export function createJourneyService({
   isLoggedIn = false,
   accessToken = null,
 }: JourneyService = {}) {
-  const canUseRemote = isLoggedIn && !!accessToken && !!API_BASE_URL;
+  const authToken = accessToken;
+  const canUseRemote = isLoggedIn && !!authToken;
+
+  // should print true after login
+  console.log("Journey API?", canUseRemote, { isLoggedIn, hasToken: !!authToken });
 
   return {
-    async load(): Promise<DayLogs[]> {
+    async load(): Promise<LogItem[]> {
       if (canUseRemote) {
-        return api<DayLogs[]>(`${API_BASE_URL}/v1/sadana-tracker/`, "GET", accessToken as string);
+        // backend should return LogItem[]
+        return api<LogItem[]>(`${API_BASE_URL}/v1/sadana-tracker`, "GET", authToken as string);
       }
       return readLocalJourney();
     },
 
-    async addItem(dayLabel: string, item: LogItem): Promise<DayLogs[]> {
+    async addItem(item: LogItem): Promise<LogItem[]> {
       if (canUseRemote) {
-        return api<DayLogs[]>(
-          `${API_BASE_URL}/v1/sadana-tracker/`,
+        // payload must be: { date, sadanaId }
+        return api<LogItem[]>(
+          `${API_BASE_URL}/v1/sadana-tracker`,
           "POST",
-          accessToken as string,
-          { dayLabel, item }
+          authToken as string,
+          item
         );
       }
 
       const prev = await readLocalJourney();
-      const day = prev.find((d) => d.dayLabel === dayLabel);
-      const alreadyExists = day?.items?.some((x) => x.sadhanaId === item.sadhanaId);
-      if (alreadyExists) return prev;
-      const next = addLocalItem(prev, dayLabel, item);
+      const next = addLocalLog(prev, item);
       await writeLocalJourney(next);
       return next;
     },
 
-    async deleteItem(dayLabel: string, itemId: string): Promise<DayLogs[]> {
+    async deleteItem(item: LogItem): Promise<LogItem[]> {
       if (canUseRemote) {
-        return api<DayLogs[]>(
-          `${API_BASE_URL}/v1/sadana-tracker/`,
+        // If your backend expects DELETE body, keep it like this:
+        return api<LogItem[]>(
+          `${API_BASE_URL}/v1/sadana-tracker`,
           "DELETE",
-          accessToken as string,
-          { dayLabel, itemId }
+          authToken as string,
+          item
         );
       }
 
       const prev = await readLocalJourney();
-      const next = deleteLocalItem(prev, dayLabel, itemId);
+      const next = deleteLocalLog(prev, item);
       await writeLocalJourney(next);
       return next;
     },

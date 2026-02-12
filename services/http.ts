@@ -1,6 +1,6 @@
 
 const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, "") || "http://localhost:8086";
+  process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, "") || "https://server-04mx.onrender.com";
 
 type Json = Record<string, any>;
 

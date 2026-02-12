@@ -1,7 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { createJourneyService } from "@services/journeyService";
-import { DayLogs, JourneyService, LogItem } from "@/app/features/sadhana/types";
-import { API_BASE_URL } from "@/constants/api.constant";
+import { DayLogs, JourneyService, LogItem } from "@/components/types/types";
 
 export function useJourneyStore({
   isLoggedIn = false,
@@ -10,10 +9,12 @@ export function useJourneyStore({
   const [days, setDays] = useState<DayLogs[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const journeyService = useMemo(() => {
-    return createJourneyService({ isLoggedIn, accessToken });
-  }, [isLoggedIn, accessToken]);
-
+  const journeyService = useMemo(
+    () => 
+      createJourneyService({ isLoggedIn, accessToken }),
+    [isLoggedIn, accessToken]
+  );
+  
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -25,8 +26,8 @@ export function useJourneyStore({
   }, [journeyService]);
 
   const addItem = useCallback(
-    async (dayLabel: string, item: LogItem) => {
-      const next = await journeyService.addItem(dayLabel, item);
+    async (item: LogItem) => {
+      const next = await journeyService.addItem(item);
       setDays(next);
     },
     [journeyService]

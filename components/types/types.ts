@@ -43,10 +43,8 @@ export type Sadhana = {
 };
 
 export type LogItem = { 
-  id: string; 
-  title: string; 
-  points: number; 
-  sadhanaId: string 
+  date: string; 
+  sadanaId: string 
 };
 
 export type DayLogs = { 

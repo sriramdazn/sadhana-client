@@ -1,4 +1,4 @@
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://localhost:8086";
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? "https://server-04mx.onrender.com";
 
 // AUTH
 export const REQUEST_OTP_PATH = "/v1/auth/register"; 
