@@ -1,62 +1,88 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
-import { useJourneyStore } from "@/hooks/useJourneyStore";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
 import Screen from "@/components/Screen";
 import GlassCard from "@/components/GlassCard";
 import Dialog from "@/components/Dialog";
 import { theme } from "@/constants/theme";
-import { todayLabel } from "@/utils/todayDate";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { COMPLETED_KEY, TOTAL_POINTS_KEY } from "@/constants/constant";
+
 import { useAuthStatus } from "@/hooks/useAuthStatus";
-import { useGuestSyncToBackend } from "@/hooks/useGuestSyncToBackend";
-import { useHomeStore } from "@/hooks/useHomeStore";
+import { useJourneyStore } from "@/hooks/useJourneyStore";
+
+import { todayIso, isoToDayLabel } from "@/utils/todayDate";
+import { COMPLETED_KEY, TOTAL_POINTS_KEY } from "@/constants/constant";
+import { getSadhanas } from "@/services/SadhanaService";
+import { Sadhana, SadhanaLogs } from "@/components/types/types";
 
 export default function JourneyScreen() {
-  
   const { isLoggedIn, accessToken } = useAuthStatus();
-  const { days, loading, load, deleteItem } = useJourneyStore({isLoggedIn, accessToken});
-  const { subtractPoints } = useHomeStore({ isLoggedIn, accessToken });
-  const [deleteTarget, setDeleteTarget] = useState<{ day: string; id: string; sadhanaId: string; points: number;} | null>(null);
+  const { days, loading, load, deleteItem } = useJourneyStore({ isLoggedIn, accessToken });
 
-  useFocusEffect(
-    useCallback(() => {
-      load();
-    }, [load])
-  );
-  useGuestSyncToBackend();
-  console.log("days--", days);
+  //reload when screen focused
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const openDeleteDialog = (payload: { day: string; id: string; sadhanaId: string; points: number; }) => setDeleteTarget(payload);
-  const closeDeleteDialog = () => setDeleteTarget(null);
+  //reload immediately after login changes (important)
+  useEffect(() => {
+    load();
+  }, [isLoggedIn, accessToken, load]);
+
+  // map sadanaId -> {name, points}
+  const [sadanaMap, setSadanaMap] = useState<Record<string, { name: string; points: number }>>({});
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const list: Sadhana[] = await getSadhanas();
+        const map: Record<string, { name: string; points: number }> = {};
+        list.forEach((s) => {
+          map[s.id] = { name: s.name, points: s.points };
+        });
+        setSadanaMap(map);
+      } catch {}
+    })();
+  }, []);
+
+  const logs: SadhanaLogs[] = useMemo(() => (Array.isArray(days) ? days : []), [days]);
+
+  const grouped = useMemo(() => {
+    return logs.reduce((acc: Record<string, SadhanaLogs[]>, item) => {
+      (acc[item.date] ||= []).push(item);
+      return acc;
+    }, {});
+  }, [logs]);
+
+  const sortedDates = useMemo(() => Object.keys(grouped).sort((a, b) => b.localeCompare(a)), [grouped]);
+
+  const [deleteTarget, setDeleteTarget] = useState<SadhanaLogs | null>(null);
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
-    const { day, id, sadhanaId, points } = deleteTarget;
+
+    const target = deleteTarget;
     setDeleteTarget(null);
-    //  Delete journey
-    await deleteItem(day, id);
-     
-    //deleting today's entry, remove tick in Home
-  
-    //  Update completed (today only)
-    if (day === todayLabel()) {
+
+    await deleteItem({ date: target.date, sadanaId: target.sadanaId });
+
+    // remove tick if deleting today
+    if (target.date === todayIso()) {
       const raw = await AsyncStorage.getItem(COMPLETED_KEY);
-      const completed = raw
-        ? JSON.parse(raw)
-        : {};
-  
-      if (completed[sadhanaId]) {
-        delete completed[sadhanaId];
-        await AsyncStorage.setItem(COMPLETED_KEY,JSON.stringify(completed));}
+      const completed = raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
+      if (completed[target.sadanaId]) {
+        delete completed[target.sadanaId];
+        await AsyncStorage.setItem(COMPLETED_KEY, JSON.stringify(completed));
+      }
+
+      // subtract points (if we know them)
+      const pts = sadanaMap[target.sadanaId]?.points || 0;
+      if (pts > 0) {
+        const pRaw = await AsyncStorage.getItem(TOTAL_POINTS_KEY);
+        const current = pRaw ? Number(pRaw) : 0;
+        const next = Math.max(0, current - pts);
+        await AsyncStorage.setItem(TOTAL_POINTS_KEY, String(next));
+      }
     }
-  
-    //Subtract points 
-      const pRaw = await AsyncStorage.getItem(TOTAL_POINTS_KEY);
-      const current = pRaw ? Number(pRaw) : 0;
-      const next = Math.max(0, current - points);
-      await AsyncStorage.setItem(TOTAL_POINTS_KEY, String(next) );
   };
 
   return (
@@ -67,23 +93,28 @@ export default function JourneyScreen() {
         <GlassCard style={{ marginTop: 12 }}>
           {loading ? (
             <Text style={styles.loading}>Loading...</Text>
+          ) : sortedDates.length === 0 ? (
+            <Text style={styles.loading}>No logs yet</Text>
           ) : (
             <View style={{ gap: 16 }}>
-              {days.map((day) => (
-                <View key={day.dayLabel}>
-                  <Text style={styles.dayLabel}>{day.dayLabel}</Text>
+              {sortedDates.map((date) => (
+                <View key={date}>
+                  <Text style={styles.dayLabel}>{isoToDayLabel(date)}</Text>
 
                   <View style={{ gap: 10, marginTop: 10 }}>
-                    {day.items.map((item: any) => (
-                      <Pressable
-                        key={item.id}
-                        onPress={() => openDeleteDialog({ day: day.dayLabel, id: item.id, sadhanaId: item.sadhanaId, points: item.points })}
-                        style={styles.logRow}
-                      >
-                        <Text style={styles.logText}>{item.title}</Text>
-                        <Text style={styles.logPts}>+{item.points}pts</Text>
-                      </Pressable>
-                    ))}
+                    {grouped[date].map((item) => {
+                      const meta = sadanaMap[item.sadanaId];
+                      return (
+                        <Pressable
+                          key={`${item.date}_${item.sadanaId}`}
+                          onPress={() => setDeleteTarget(item)}
+                          style={styles.logRow}
+                        >
+                          <Text style={styles.logText}>{meta?.name ?? item.sadanaId}</Text>
+                          {!!meta?.points && <Text style={styles.logPts}>+{meta.points}pts</Text>}
+                        </Pressable>
+                      );
+                    })}
                   </View>
                 </View>
               ))}
@@ -95,7 +126,7 @@ export default function JourneyScreen() {
       <Dialog
         visible={!!deleteTarget}
         title="Are you sure?"
-        onCancel={closeDeleteDialog}
+        onCancel={() => setDeleteTarget(null)}
         onConfirm={confirmDelete}
         cancelText="Cancel"
         confirmText="Delete"

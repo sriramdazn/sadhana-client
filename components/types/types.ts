@@ -51,3 +51,8 @@ export type DayLogs = {
   dayLabel: string; 
   items: LogItem[] 
 };
+
+export type SadhanaLogs = {
+  date: string; 
+  sadanaId: string;
+};

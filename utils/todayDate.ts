@@ -21,3 +21,9 @@ export function todayIso(date = new Date()) {
   const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
 }
+
+export function isoToDayLabel(iso: string) {
+  const d = new Date(`${iso}T00:00:00`);
+  const day = d.getDate();
+  return `${day}${ordinal(day)} ${MONTHS[d.getMonth()]}`;
+}

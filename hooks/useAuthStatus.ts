@@ -6,6 +6,7 @@ export function useAuthStatus() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
 
   const refresh = useCallback(async () => {
     const token = await AsyncStorage.getItem("access_token");
@@ -15,15 +16,20 @@ export function useAuthStatus() {
     setUserId(user);
     setAccessToken(token);
     setIsLoggedIn(flag === "true" && !!token);
+    setReady(true);
   }, []);
 
   useEffect(() => {
-    refresh().catch(() => {});
+    refresh().catch(() => setReady(true));
+  }, [refresh]);
+
+  // ✅ THIS IS THE KEY FIX: update auth everywhere when Settings logs in/out
+  useEffect(() => {
     const unsub = onAuthChanged(() => {
       refresh().catch(() => {});
     });
     return unsub;
   }, [refresh]);
 
-  return { isLoggedIn, accessToken, userId, refresh };
+  return { isLoggedIn, accessToken, ready, userId, refresh };
 }
