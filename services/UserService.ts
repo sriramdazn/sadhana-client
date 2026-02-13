@@ -42,3 +42,20 @@ export const getUserPoints = async (token: string) => {
   
     return res.json();
   };
+
+  export const getTodayTracker = async (token: string) => {
+    const res = await fetch("http://localhost:8086/v1/sadana-tracker", {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+  
+    if (!res.ok) {
+      throw new Error("Failed to fetch tracker");
+    }
+  
+    return res.json(); 
+  };
+  
+  
