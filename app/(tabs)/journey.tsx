@@ -110,7 +110,7 @@ export default function JourneyScreen() {
                           onPress={() => setDeleteTarget(item)}
                           style={styles.logRow}
                         >
-                          <Text style={styles.logText}>{meta?.name ?? item.sadanaId}</Text>
+                          <Text style={styles.logText}>{meta?.name}</Text>
                           {!!meta?.points && <Text style={styles.logPts}>+{meta.points}pts</Text>}
                         </Pressable>
                       );

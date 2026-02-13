@@ -16,8 +16,8 @@ import { useJourneyStore } from "@/hooks/useJourneyStore";
 import { todayIso } from "@/utils/todayDate";
 import { useIsFocused } from "@react-navigation/native";
 import { Sadhana } from "@/components/types/types";
-import { addUserPoints, getUserPoints, getTodayTracker } from "@/services/UserService";
 import { getSession, saveSession } from "@/utils/storage";
+import { getTodayTracker, getUserPoints } from "@/services/UserService";
 
 
 export default function HomeScreen() {
@@ -29,7 +29,6 @@ export default function HomeScreen() {
   const [showStars, setShowStars] = useState(false);
   const [localPoints, setLocalPoints] = useState<number>(0);
   const [decayPoints, setDecayPoints] = useState<number>(-50);
-  const [addSadhana, setAddSadhana] = useState(false);
 
   const scrollRef = useRef<ScrollView>(null);
   const isFocused = useIsFocused();
@@ -47,13 +46,13 @@ export default function HomeScreen() {
       const localLogs = JSON.parse(raw);
       if (!Array.isArray(localLogs) || !localLogs.length) return;  
       //  Send to API
-      for (const item of localLogs) {
-        await addUserPoints(
-          accessToken!,
-          item.date,
-          item.sadanaId
-        );
-      }
+      // for (const item of localLogs) {
+      //   await addUserPoints(
+      //     accessToken!,
+      //     item.date,
+      //     item.sadanaId
+      //   );
+      // }
   
       //Clear local journey
       await AsyncStorage.removeItem("sadhana_journey");
@@ -113,9 +112,7 @@ export default function HomeScreen() {
  
   useEffect(() => {
     if (!isLoggedIn || !accessToken) return;
-  
     syncCompletedFromApi();
-  
   }, [isLoggedIn, accessToken]);
   
 
@@ -131,17 +128,13 @@ export default function HomeScreen() {
     (async () => {
       try {
         const data = await getUserPoints(accessToken);
-  
         if (data?.sadhanaPoints !== undefined) {
-
           await saveSession({decayPoints: data.decayPoints});
-
           if (data.decayPoints !== undefined) {
             await AsyncStorage.setItem(
               "DECAY_POINTS",
               String(data.decayPoints)
             );
-  
             setDecayPoints(data.decayPoints);
           }  
           // Update UI
@@ -161,16 +154,12 @@ export default function HomeScreen() {
       didSyncRef.current = false;
       return;
     }
-  
     if (!accessToken) return;
-  
     if (didSyncRef.current) return;
-  
     didSyncRef.current = true;
-  
     (async () => {
       await syncGuestToApi();
-      await syncCompletedFromApi();
+      // await syncCompletedFromApi();
     })();
   
   }, [isLoggedIn, accessToken]);
@@ -232,12 +221,7 @@ export default function HomeScreen() {
   };
 
   const confirmAddToJourney = async () => {
-    console.log("confirmAddToJourney");
-    console.log("confirmAddToJourney trace");
     if (!selectedItem) return;
-    if (addSadhana) return;
-    setAddSadhana(true);
-
     try {
       const next = localPoints + selectedItem.points;
 
@@ -249,22 +233,22 @@ export default function HomeScreen() {
       );
 
       // Sync API (if logged in)
-      if (isLoggedIn) {
-        try {
-          if (accessToken) {
-            await addUserPoints(
-              accessToken,
-              todayIso(),
-              selectedItem.id
-            );
-          }
+      // if (isLoggedIn) {
+      //   try {
+      //     if (accessToken) {
+      //       await addUserPoints(
+      //         accessToken,
+      //         todayIso(),
+      //         selectedItem.id
+      //       );
+      //     }
 
-          await syncCompletedFromApi();
+      //     await syncCompletedFromApi();
 
-        } catch (e) {
-          console.log("API sync failed", e);
-        }
-      }
+      //   } catch (e) {
+      //     console.log("API sync failed", e);
+      //   }
+      // }
       // Mark completed
       const nextCompleted = {
         ...completedIds,
@@ -291,9 +275,6 @@ export default function HomeScreen() {
     } catch (err) {
       console.error("Add failed", err);
       alert("Sync failed. Try again.");
-    }
-    finally {
-      setAddSadhana(false);
     }
   };
   

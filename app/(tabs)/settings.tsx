@@ -25,18 +25,18 @@ import { COMPLETED_KEY, HOME_DAY_KEY, JOURNEY_KEY, TOTAL_POINTS_KEY, DECAY_POINT
 import { todayIso } from "@/utils/todayDate";
 import { sadanaSyncPayload } from "@/utils/sadhanaPayload";
 import { useGuestStorage } from "@/hooks/useGuestStorage";
+import OtpBox from "@/components/OtpBox";
 
 const DEFAULT_DECAY = -50;
 
 const SkeletonButton: React.FC = () => (
   <View style={styles.skeletonButton} />
 );
-
+export type TStage = "default" | "email" | "otp" | "done";
 const SettingsScreen: React.FC = () => {
   const [stage, setStage] = useState<"default" | "email" | "otp" | "done">(
     "default"
   );
-
   const [email, setEmail] = useState("");
 
   
@@ -338,29 +338,37 @@ const SettingsScreen: React.FC = () => {
             )}
 
             {stage === "otp" && (
-              <View style={styles.inputBlock}>
-                <Text style={styles.label}>Enter OTP</Text>
+              // <View style={styles.inputBlock}>
+              //   <Text style={styles.label}>Enter OTP</Text>
 
-                <Input
-                  placeholder="Enter 6-digit OTP"
-                  maxLength={6}
-                  size="large"
-                  style={styles.input}
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value)}
-                  disabled={loading}
-                />
+              //   <Input
+              //     placeholder="Enter 6-digit OTP"
+              //     maxLength={6}
+              //     size="large"
+              //     style={styles.input}
+              //     value={otp}
+              //     onChange={(e) => setOtp(e.target.value)}
+              //     disabled={loading}
+              //   />
 
-                <Button
-                  type="primary"
-                  size="large"
-                  style={styles.mainButton}
-                  onClick={handleOtpVerify}
-                  loading={loading}
-                >
-                  Verify
-                </Button>
-              </View>
+              //   <Button
+              //     type="primary"
+              //     size="large"
+              //     style={styles.mainButton}
+              //     onClick={handleOtpVerify}
+              //     loading={loading}
+              //   >
+              //     Verify
+              //   </Button>
+              // </View>
+              <OtpBox
+              email={email}
+              otpId={otpId}
+              dailyDecay={dailyDecay}
+              onSetDailyDecay={(value:number) => setDailyDecay(value)}
+              onSetStage={(value:TStage) => {setStage(value)}}
+            />
+
             )}
           </View>
         </GlassCard>

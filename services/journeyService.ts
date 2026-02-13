@@ -1,6 +1,7 @@
 import { JourneyService, LogItem } from "@/components/types/types";
 import { API_BASE_URL } from "@/constants/api.constant";
 import { JOURNEY_KEY } from "@/constants/constant";
+import { isoToDayLabel } from "@/utils/todayDate";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type RemoteTrackerRow = {
@@ -39,12 +40,46 @@ function flattenRemote(res: RemoteTrackerResponse): LogItem[] {
   return out;
 }
 
+// async function readLocalJourney(): Promise<LogItem[]> {
+//   const raw = await AsyncStorage.getItem(JOURNEY_KEY);
+//   if (!raw) return [];
+//   try {
+//     const parsed = JSON.parse(raw);
+//     return Array.isArray(parsed) ? (parsed as LogItem[]) : [];
+//   } catch {
+//     return [];
+//   }
+// }
+
 async function readLocalJourney(): Promise<LogItem[]> {
   const raw = await AsyncStorage.getItem(JOURNEY_KEY);
   if (!raw) return [];
+
   try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as LogItem[]) : [];
+    const parsed: any = JSON.parse(raw);
+    // LogItem[]
+    if (Array.isArray(parsed)) return parsed as LogItem[];
+    // guest format: { days: [{ dayLabel, items: [{ sadhanaId }] }] }
+    const days = parsed?.days;
+    if (Array.isArray(days)) {
+      const out: LogItem[] = [];
+
+      for (const d of days) {
+        const dayLabel = d?.dayLabel;
+        const items = Array.isArray(d?.items) ? d.items : [];
+
+        const iso = isoToDayLabel(dayLabel);
+        for (const it of items) {
+          const sadanaId = it?.sadhanaId;
+          if (iso && sadanaId) out.push({ date: iso, sadanaId });
+        }
+      }
+      // migrate to new format so future reads are fast
+      await AsyncStorage.setItem(JOURNEY_KEY, JSON.stringify(out));
+      return out;
+    }
+
+    return [];
   } catch {
     return [];
   }
