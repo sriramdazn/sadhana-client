@@ -21,7 +21,7 @@ import DailyDecaySlider from "@/components/DailyDecaySlider";
 import { useAuthStatus } from "@/hooks/useAuthStatus";
 import { emitAuthChanged } from "@/utils/authEvents";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { COMPLETED_KEY, HOME_DAY_KEY, JOURNEY_KEY, TOTAL_POINTS_KEY, DECAY_POINTS } from "@/constants/constant";
+import { COMPLETED_KEY, HOME_DAY_KEY, JOURNEY_KEY, TOTAL_POINTS_KEY } from "@/constants/constant";
 import { todayIso } from "@/utils/todayDate";
 import { sadanaSyncPayload } from "@/utils/sadhanaPayload";
 import { useGuestStorage } from "@/hooks/useGuestStorage";
@@ -169,8 +169,8 @@ const SettingsScreen: React.FC = () => {
     }
     setLoading(true);
     try {
-      // const preSession = await getSession();
-      // const storedDecay = preSession.decayPoints;
+      const preSession = await getSession();
+      const storedDecay = preSession.decayPoints;
       // const res = await verifyEmailOtp({ otpId, otp: Number(otp) });
 
       const journey = (await useGuestStorage.getJourney()) ?? [];
@@ -198,7 +198,7 @@ const SettingsScreen: React.FC = () => {
 
       try {
         // Push preferred value to server
-        await setDecayPoints({ decayPoints: nextDecay }, res.token);
+        await setDecayPoints({ decayPoints: storedDecay }, res.token);
       } catch (pushErr) {
         console.log("Failed pushing local decay", pushErr);
         // fallback to server value if available
@@ -213,9 +213,9 @@ const SettingsScreen: React.FC = () => {
         email,
         userId: user.id,
         isLoggedIn: true,
-        decayPoints: nextDecay,
+        decayPoints: storedDecay,
       });
-      setDailyDecay(nextDecay);
+      setDailyDecay(storedDecay);
 
       emitAuthChanged();
       setStage("done");
@@ -247,6 +247,7 @@ const SettingsScreen: React.FC = () => {
         [HOME_DAY_KEY, todayIso()],
       ]);
       await AsyncStorage.removeItem(JOURNEY_KEY);
+      setDailyDecay(-50);
       emitAuthChanged();
       refresh();
       setEmail("");

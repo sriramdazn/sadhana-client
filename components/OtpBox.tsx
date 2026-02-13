@@ -9,6 +9,8 @@ import { getUserId, setDecayPoints, verifyEmailOtp } from '@/services/auth.servi
 import { emitAuthChanged } from '@/utils/authEvents';
 import { theme } from '@/constants/theme';
 import { TStage } from '@/app/(tabs)/settings';
+import { sadanaSyncPayload } from '@/utils/sadhanaPayload';
+import { useGuestStorage } from '@/hooks/useGuestStorage';
 
 const OTP_LENGTH = 4;
 
@@ -41,8 +43,12 @@ const OtpBox = ({ email, otpId, dailyDecay, onSetDailyDecay, onSetStage }: TProp
         try {
             const preSession = await getSession();
             const storedDecay = preSession.decayPoints;
+            const journey = (await useGuestStorage.getJourney()) ?? [];
+            const payload = sadanaSyncPayload({ days: journey });
 
-            const res = await verifyEmailOtp({ otpId, otp: Number(otp) });
+            // const res = await verifyEmailOtp({ otpId, otp: Number(otp) });
+            const res = await verifyEmailOtp({ otpId, otp: Number(otp), ...payload });
+
             const user = await getUserId(res.token);
 
             // Save basic session first

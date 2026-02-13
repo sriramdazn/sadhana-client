@@ -131,10 +131,10 @@ export default function HomeScreen() {
         if (data?.sadhanaPoints !== undefined) {
           await saveSession({decayPoints: data.decayPoints});
           if (data.decayPoints !== undefined) {
-            await AsyncStorage.setItem(
-              "DECAY_POINTS",
-              String(data.decayPoints)
-            );
+            // await AsyncStorage.setItem(
+            //   "decay_points",
+            //   String(data.decayPoints)
+            // );
             setDecayPoints(data.decayPoints);
           }  
           // Update UI
