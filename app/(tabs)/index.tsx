@@ -16,9 +16,8 @@ import { useJourneyStore } from "@/hooks/useJourneyStore";
 import { todayIso } from "@/utils/todayDate";
 import { useIsFocused } from "@react-navigation/native";
 import { Sadhana } from "@/components/types/types";
-import { addUserPoints, getUserPoints } from "@/services/UserService";
+import { addUserPoints, getUserPoints, getTodayTracker } from "@/services/UserService";
 
-const DAILY_DECAY = -50;
 
 export default function HomeScreen() {
   const [sadhanas, setSadhanas] = useState<Sadhana[]>([]);
@@ -28,6 +27,7 @@ export default function HomeScreen() {
   const [selectedItem, setSelectedItem] = useState<Sadhana | null>(null);
   const [showStars, setShowStars] = useState(false);
   const [localPoints, setLocalPoints] = useState<number>(0);
+  const [decayPoints, setDecayPoints] = useState(0);
 
   const scrollRef = useRef<ScrollView>(null);
   const isFocused = useIsFocused();
@@ -36,6 +36,110 @@ export default function HomeScreen() {
   const { isLoggedIn, accessToken, userId } = useAuthStatus();
   console.log("AUTH (Home):", { isLoggedIn, hasToken: !!accessToken, userId });
   const { addItem } = useJourneyStore({ isLoggedIn, accessToken });
+
+  const syncGuestToApi = async () => {
+    try {
+      // Read local journey
+      const raw = await AsyncStorage.getItem("sadhana_journey");
+  
+      if (!raw) return;
+  
+      const localLogs = JSON.parse(raw);
+  
+      if (!Array.isArray(localLogs) || !localLogs.length) return;
+  
+      console.log("Syncing guest data:", localLogs);
+  
+      //  Send to API
+      for (const item of localLogs) {
+        await addUserPoints(
+          accessToken!,
+          item.date,
+          item.sadanaId
+        );
+      }
+  
+      //Clear local journey
+      await AsyncStorage.removeItem("sadhana_journey");
+  
+      // Reload points from API
+      const data = await getUserPoints(accessToken!);
+  
+      if (data?.sadhanaPoints !== undefined) {
+        await AsyncStorage.setItem(
+          TOTAL_POINTS_KEY,
+          String(data.sadhanaPoints)
+        );
+  
+        setLocalPoints(data.sadhanaPoints);
+      }
+  
+      if (data?.decayPoints !== undefined) {
+        await AsyncStorage.setItem(
+          "DECAY_POINTS",
+          String(data.decayPoints)
+        );
+  
+        setDecayPoints(data.decayPoints);
+      }
+  
+      console.log("Guest sync is done");
+  
+    } catch (err) {
+      console.log("Guest sync has failed", err);
+    }
+  };
+
+  const syncCompletedFromApi = async () => {
+    if (!accessToken) return;
+  
+    try {
+      const res = await getTodayTracker(accessToken);
+  
+      const records = res?.data;
+  
+      if (!Array.isArray(records)) return;
+  
+      const today = todayIso();
+  
+      const todayCompleted: Record<string, boolean> = {};
+  
+      records.forEach((item: any) => {
+        // matching todays today
+        if (item?.date?.startsWith(today)) {
+          const opted = item?.optedSadanas;
+  
+          if (Array.isArray(opted)) {
+            opted.forEach((id: string) => {
+              todayCompleted[id] = true;
+            });
+          }
+        }
+      });
+  
+      // Save
+      await AsyncStorage.setItem(
+        COMPLETED_KEY,
+        JSON.stringify(todayCompleted)
+      );
+  
+      // Update UI
+      setCompletedIds(todayCompleted);
+  
+      console.log("Completed from API:", todayCompleted);
+  
+    } catch (err) {
+      console.log("syncCompletedFromApi failed", err);
+    }
+  };
+ 
+  useEffect(() => {
+    if (!isLoggedIn || !accessToken) return;
+  
+    syncCompletedFromApi();
+  
+  }, [isLoggedIn, accessToken]);
+  
 
   useEffect(() => {
     if (!isLoggedIn) {
@@ -55,7 +159,17 @@ export default function HomeScreen() {
           await AsyncStorage.setItem(
             TOTAL_POINTS_KEY,
             String(data.sadhanaPoints)
+            
           );
+
+          if (data.decayPoints !== undefined) {
+            await AsyncStorage.setItem(
+              "DECAY_POINTS",
+              String(data.decayPoints)
+            );
+  
+            setDecayPoints(data.decayPoints);
+          }
 
           console.log(await AsyncStorage.getItem(TOTAL_POINTS_KEY))
   
@@ -66,6 +180,28 @@ export default function HomeScreen() {
         console.log("Failed to sync points from API", e);
       }
     })();
+  }, [isLoggedIn, accessToken]);
+
+  const didSyncRef = useRef(false);
+
+  useEffect(() => {
+    // reset on logout
+    if (!isLoggedIn) {
+      didSyncRef.current = false;
+      return;
+    }
+  
+    if (!accessToken) return;
+  
+    if (didSyncRef.current) return;
+  
+    didSyncRef.current = true;
+  
+    (async () => {
+      await syncGuestToApi();
+      await syncCompletedFromApi();
+    })();
+  
   }, [isLoggedIn, accessToken]);
   
 
@@ -110,6 +246,11 @@ export default function HomeScreen() {
         setLocalPoints(Number(pRaw));
       }
 
+      const dRaw = await AsyncStorage.getItem("DECAY_POINTS");
+      if (dRaw !== null) {
+        setDecayPoints(Number(dRaw));
+      }
+
     })();
   }, [isFocused]);
 
@@ -143,11 +284,13 @@ export default function HomeScreen() {
             );
           }
 
+          await syncCompletedFromApi();
+
         } catch (e) {
           console.log("API sync failed", e);
         }
       }
-      // 2️⃣ Mark completed
+      // Mark completed
       const nextCompleted = {
         ...completedIds,
         [selectedItem.id]: true,
@@ -192,7 +335,7 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.decayWrap}>
-          <Text style={styles.decay}>Daily Decay: {DAILY_DECAY}</Text>
+          <Text style={styles.decay}>Daily Decay: {decayPoints}</Text>
         </View>
 
         <View style={styles.hero}>
