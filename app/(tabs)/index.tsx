@@ -17,6 +17,7 @@ import { todayIso } from "@/utils/todayDate";
 import { useIsFocused } from "@react-navigation/native";
 import { Sadhana } from "@/components/types/types";
 import { addUserPoints, getUserPoints, getTodayTracker } from "@/services/UserService";
+import { getSession, saveSession } from "@/utils/storage";
 
 
 export default function HomeScreen() {
@@ -27,7 +28,7 @@ export default function HomeScreen() {
   const [selectedItem, setSelectedItem] = useState<Sadhana | null>(null);
   const [showStars, setShowStars] = useState(false);
   const [localPoints, setLocalPoints] = useState<number>(0);
-  const [decayPoints, setDecayPoints] = useState(0);
+  const [decayPoints, setDecayPoints] = useState<number>(-50);
   const [addSadhana, setAddSadhana] = useState(false);
 
   const scrollRef = useRef<ScrollView>(null);
@@ -68,10 +69,7 @@ export default function HomeScreen() {
       }
   
       if (data?.decayPoints !== undefined) {
-        await AsyncStorage.setItem(
-          "DECAY_POINTS",
-          String(data.decayPoints)
-        );
+        await saveSession({decayPoints: data.decayPoints});
   
         setDecayPoints(data.decayPoints);
       }
@@ -135,12 +133,8 @@ export default function HomeScreen() {
         const data = await getUserPoints(accessToken);
   
         if (data?.sadhanaPoints !== undefined) {
-          // Save API points to local storage
-          await AsyncStorage.setItem(
-            TOTAL_POINTS_KEY,
-            String(data.sadhanaPoints)
-            
-          );
+
+          await saveSession({decayPoints: data.decayPoints});
 
           if (data.decayPoints !== undefined) {
             await AsyncStorage.setItem(
@@ -222,11 +216,11 @@ export default function HomeScreen() {
       if (pRaw !== null) {
         setLocalPoints(Number(pRaw));
       }
-
-      const dRaw = await AsyncStorage.getItem("DECAY_POINTS");
-      if (dRaw !== null) {
-        setDecayPoints(Number(dRaw));
+      const session = await getSession();
+      if (typeof session.decayPoints === "number") {
+        setDecayPoints(session.decayPoints);
       }
+
 
     })();
   }, [isFocused]);

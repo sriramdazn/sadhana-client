@@ -15,13 +15,27 @@ export async function saveSession(opts: {
   isLoggedIn?: boolean;
   decayPoints?: number;
 }) {
-  await AsyncStorage.multiSet([
-    [STORAGE_KEYS.accessToken, opts.token ?? ""],
-    [STORAGE_KEYS.isLoggedIn, String(opts.isLoggedIn ?? "")],
-    [STORAGE_KEYS.userEmail, opts.email ?? ""],
-    [STORAGE_KEYS.userId, opts.userId ?? ""],
-    [STORAGE_KEYS.decayPoints, opts.decayPoints?.toString() ?? ""],
-  ]);
+  const pairs: [string, string][] = [];
+
+  if (opts.token !== undefined) {
+    pairs.push([STORAGE_KEYS.accessToken, opts.token]);
+  }
+  if (opts.isLoggedIn !== undefined) {
+    pairs.push([STORAGE_KEYS.isLoggedIn, String(opts.isLoggedIn)]);
+  }
+  if (opts.email !== undefined) {
+    pairs.push([STORAGE_KEYS.userEmail, opts.email]);
+  }
+  if (opts.userId !== undefined) {
+    pairs.push([STORAGE_KEYS.userId, opts.userId]);
+  }
+  if (opts.decayPoints !== undefined) {
+    pairs.push([STORAGE_KEYS.decayPoints, String(opts.decayPoints)]);
+  }
+
+  if (pairs.length) {
+    await AsyncStorage.multiSet(pairs);
+  }
 }
 
 export async function clearSession() {

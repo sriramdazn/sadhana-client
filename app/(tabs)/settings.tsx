@@ -21,10 +21,12 @@ import DailyDecaySlider from "@/components/DailyDecaySlider";
 import { useAuthStatus } from "@/hooks/useAuthStatus";
 import { emitAuthChanged } from "@/utils/authEvents";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { COMPLETED_KEY, HOME_DAY_KEY, JOURNEY_KEY, TOTAL_POINTS_KEY } from "@/constants/constant";
+import { COMPLETED_KEY, HOME_DAY_KEY, JOURNEY_KEY, TOTAL_POINTS_KEY, DECAY_POINTS } from "@/constants/constant";
 import { todayIso } from "@/utils/todayDate";
+import { sadanaSyncPayload } from "@/utils/sadhanaPayload";
+import { useGuestStorage } from "@/hooks/useGuestStorage";
 
-const DEFAULT_DECAY = 50;
+const DEFAULT_DECAY = -50;
 
 const SkeletonButton: React.FC = () => (
   <View style={styles.skeletonButton} />
@@ -167,10 +169,15 @@ const SettingsScreen: React.FC = () => {
     }
     setLoading(true);
     try {
-      const preSession = await getSession();
-      const storedDecay = preSession.decayPoints;
+      // const preSession = await getSession();
+      // const storedDecay = preSession.decayPoints;
+      // const res = await verifyEmailOtp({ otpId, otp: Number(otp) });
 
-      const res = await verifyEmailOtp({ otpId, otp: Number(otp) });
+      const journey = (await useGuestStorage.getJourney()) ?? [];
+      const payload = sadanaSyncPayload({ days: journey });
+      const res = await verifyEmailOtp({ otpId, otp: Number(otp), ...payload });
+     
+
       const user = await getUserId(res.token);
 
       // Save basic session first
@@ -233,7 +240,7 @@ const SettingsScreen: React.FC = () => {
       }
 
       await clearSession();
-      await saveSession({ decayPoints: dailyDecay, isLoggedIn: false });
+      await saveSession({ decayPoints: -50, isLoggedIn: false });
       await AsyncStorage.multiSet([
         [COMPLETED_KEY, JSON.stringify({})],
         [TOTAL_POINTS_KEY, "50"], 
@@ -241,7 +248,7 @@ const SettingsScreen: React.FC = () => {
       ]);
       await AsyncStorage.removeItem(JOURNEY_KEY);
       emitAuthChanged();
-
+      refresh();
       setEmail("");
       setOtp("");
       setOtpId(null);

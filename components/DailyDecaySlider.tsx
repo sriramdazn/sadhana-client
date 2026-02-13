@@ -45,8 +45,8 @@ const DailyDecaySlider: React.FC<Props> = ({
           <FrownOutlined style={frownStyle} />
           <View style={styles.sliderWrapper}>
             <Slider
-              min={0}
-              max={100}
+              min={-100}
+              max={-25}
               step={25}
               value={value}
               onChange={(v) => onChange(Number(v))}
