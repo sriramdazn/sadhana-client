@@ -99,10 +99,7 @@ export function createJourneyService({
 }: JourneyService = {}) {
   const token = accessToken;
   const canUseRemote = isLoggedIn && !!token;
-
-  // CHECK -after login print true
-  console.log("Journey API?", canUseRemote);
-
+  
   return {
     async load(): Promise<LogItem[]> {
       if (canUseRemote) {

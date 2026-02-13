@@ -1,7 +1,8 @@
+import { API_BASE_URL } from "@/constants/api.constant";
+
 export const getUserPoints = async (token: string) => {
-    console.log("get user details");
   
-    const res = await fetch("http://localhost:8086/v1/user", {
+    const res = await fetch(`${API_BASE_URL}/v1/user`, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -22,9 +23,7 @@ export const getUserPoints = async (token: string) => {
     sadanaId: string
   ) => {
   
-    console.log("send sadhana details");
-  
-    const res = await fetch("http://localhost:8086/v1/sadana-tracker/", {
+    const res = await fetch(`${API_BASE_URL}/v1/sadana-tracker`,{
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -44,7 +43,7 @@ export const getUserPoints = async (token: string) => {
   };
 
   export const getTodayTracker = async (token: string) => {
-    const res = await fetch("http://localhost:8086/v1/sadana-tracker", {
+    const res = await fetch(`${API_BASE_URL}/v1/sadana-tracker`, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${token}`,

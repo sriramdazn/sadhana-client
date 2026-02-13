@@ -28,28 +28,23 @@ export default function HomeScreen() {
   const [showStars, setShowStars] = useState(false);
   const [localPoints, setLocalPoints] = useState<number>(0);
   const [decayPoints, setDecayPoints] = useState(0);
+  const [addSadhana, setAddSadhana] = useState(false);
 
   const scrollRef = useRef<ScrollView>(null);
   const isFocused = useIsFocused();
+  
 
   // const { isLoggedIn, token} = getSession();
   const { isLoggedIn, accessToken, userId } = useAuthStatus();
-  console.log("AUTH (Home):", { isLoggedIn, hasToken: !!accessToken, userId });
   const { addItem } = useJourneyStore({ isLoggedIn, accessToken });
 
   const syncGuestToApi = async () => {
     try {
       // Read local journey
       const raw = await AsyncStorage.getItem("sadhana_journey");
-  
       if (!raw) return;
-  
       const localLogs = JSON.parse(raw);
-  
-      if (!Array.isArray(localLogs) || !localLogs.length) return;
-  
-      console.log("Syncing guest data:", localLogs);
-  
+      if (!Array.isArray(localLogs) || !localLogs.length) return;  
       //  Send to API
       for (const item of localLogs) {
         await addUserPoints(
@@ -61,10 +56,8 @@ export default function HomeScreen() {
   
       //Clear local journey
       await AsyncStorage.removeItem("sadhana_journey");
-  
       // Reload points from API
       const data = await getUserPoints(accessToken!);
-  
       if (data?.sadhanaPoints !== undefined) {
         await AsyncStorage.setItem(
           TOTAL_POINTS_KEY,
@@ -82,9 +75,6 @@ export default function HomeScreen() {
   
         setDecayPoints(data.decayPoints);
       }
-  
-      console.log("Guest sync is done");
-  
     } catch (err) {
       console.log("Guest sync has failed", err);
     }
@@ -92,23 +82,16 @@ export default function HomeScreen() {
 
   const syncCompletedFromApi = async () => {
     if (!accessToken) return;
-  
     try {
       const res = await getTodayTracker(accessToken);
-  
       const records = res?.data;
-  
       if (!Array.isArray(records)) return;
-  
       const today = todayIso();
-  
       const todayCompleted: Record<string, boolean> = {};
-  
       records.forEach((item: any) => {
         // matching todays today
         if (item?.date?.startsWith(today)) {
           const opted = item?.optedSadanas;
-  
           if (Array.isArray(opted)) {
             opted.forEach((id: string) => {
               todayCompleted[id] = true;
@@ -124,10 +107,7 @@ export default function HomeScreen() {
       );
   
       // Update UI
-      setCompletedIds(todayCompleted);
-  
-      console.log("Completed from API:", todayCompleted);
-  
+      setCompletedIds(todayCompleted);  
     } catch (err) {
       console.log("syncCompletedFromApi failed", err);
     }
@@ -169,10 +149,7 @@ export default function HomeScreen() {
             );
   
             setDecayPoints(data.decayPoints);
-          }
-
-          console.log(await AsyncStorage.getItem(TOTAL_POINTS_KEY))
-  
+          }  
           // Update UI
           setLocalPoints(data.sadhanaPoints);
         }
@@ -261,7 +238,11 @@ export default function HomeScreen() {
   };
 
   const confirmAddToJourney = async () => {
+    console.log("confirmAddToJourney");
+    console.log("confirmAddToJourney trace");
     if (!selectedItem) return;
+    if (addSadhana) return;
+    setAddSadhana(true);
 
     try {
       const next = localPoints + selectedItem.points;
@@ -316,6 +297,9 @@ export default function HomeScreen() {
     } catch (err) {
       console.error("Add failed", err);
       alert("Sync failed. Try again.");
+    }
+    finally {
+      setAddSadhana(false);
     }
   };
   
@@ -394,7 +378,7 @@ const styles = StyleSheet.create({
     color: "#FFD166",
     fontSize: 13,
     fontWeight: "700",
-    backgroundColor: "rgba(255, 209, 102, 0.12)",
+    backgroundColor: "rgba(2505, 209, 102, 0.12)",
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,

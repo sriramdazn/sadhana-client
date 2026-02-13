@@ -5,8 +5,7 @@ import { todayIso } from "@/utils/todayDate";
 export async function resetTicksIfNewDay(setCompletedIds: (v: any) => void) {
   const today = todayIso();
   const savedDay = await AsyncStorage.getItem(HOME_DAY_KEY);
-  console.log("HOME DAY CHECK", { savedDay, today });
-
+  
   if (savedDay !== today) {
     await AsyncStorage.multiSet([
       [HOME_DAY_KEY, today],

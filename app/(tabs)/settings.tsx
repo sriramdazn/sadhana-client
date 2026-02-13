@@ -212,14 +212,6 @@ const SettingsScreen: React.FC = () => {
 
       emitAuthChanged();
       setStage("done");
-
-      // Optional debug
-      const check = await AsyncStorage.multiGet([
-        "is_logged_in",
-        "access_token",
-        "user_id",
-      ]);
-      console.log("Settings, CHECK:", check);
     } catch (err: any) {
       alert(err?.message || "OTP verification failed");
     } finally {
