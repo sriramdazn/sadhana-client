@@ -13,11 +13,9 @@ import { COMPLETED_KEY, HOME_DAY_KEY, TOTAL_POINTS_KEY } from "@/constants/const
 import { getSadhanas } from "@/services/SadhanaService";
 import { useAuthStatus } from "@/hooks/useAuthStatus";
 import { useJourneyStore } from "@/hooks/useJourneyStore";
-import { todayIso, todayLabel } from "@/utils/todayDate";
+import { todayIso } from "@/utils/todayDate";
 import { useIsFocused } from "@react-navigation/native";
 import { Sadhana } from "@/components/types/types";
-import { getSession } from "@/utils/storage";
-import { resetTicksIfNewDay } from "@/services/reset";
 import { addUserPoints, getUserPoints } from "@/services/UserService";
 
 const DAILY_DECAY = -50;
@@ -38,6 +36,12 @@ export default function HomeScreen() {
   const { isLoggedIn, accessToken, userId } = useAuthStatus();
   console.log("AUTH (Home):", { isLoggedIn, hasToken: !!accessToken, userId });
   const { addItem } = useJourneyStore({ isLoggedIn, accessToken });
+
+  useEffect(() => {
+    if (!isLoggedIn) {
+      setCompletedIds({});
+    }
+  }, [isLoggedIn]);
 
   useEffect(() => {
     if (!isLoggedIn || !accessToken) return;

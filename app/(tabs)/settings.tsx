@@ -21,6 +21,8 @@ import DailyDecaySlider from "@/components/DailyDecaySlider";
 import { useAuthStatus } from "@/hooks/useAuthStatus";
 import { emitAuthChanged } from "@/utils/authEvents";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { COMPLETED_KEY, HOME_DAY_KEY, JOURNEY_KEY, TOTAL_POINTS_KEY } from "@/constants/constant";
+import { todayIso } from "@/utils/todayDate";
 
 const DEFAULT_DECAY = 50;
 
@@ -240,7 +242,12 @@ const SettingsScreen: React.FC = () => {
 
       await clearSession();
       await saveSession({ decayPoints: dailyDecay, isLoggedIn: false });
-
+      await AsyncStorage.multiSet([
+        [COMPLETED_KEY, JSON.stringify({})],
+        [TOTAL_POINTS_KEY, "50"], 
+        [HOME_DAY_KEY, todayIso()],
+      ]);
+      await AsyncStorage.removeItem(JOURNEY_KEY);
       emitAuthChanged();
 
       setEmail("");
