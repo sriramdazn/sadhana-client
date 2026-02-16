@@ -15,7 +15,6 @@ type RemoteTrackerResponse = {
 
 function toYmd(dateStr: string) {
   if (!dateStr) return "";
-  // handles "2026-02-13T00:00:00.000Z" => "2026-02-13"
   return dateStr.length >= 10 ? dateStr.slice(0, 10) : dateStr;
 }
 

@@ -1,8 +1,12 @@
+import { TOTAL_POINTS_KEY } from "@/constants/constant";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
 type LogItem = { date: string; sadanaId: string };
 
-export function sadanaSyncPayload(args: { days: LogItem[] }) {
+export async function sadanaSyncPayload(args: { days: LogItem[] }) {
   const days = Array.isArray(args.days) ? args.days : [];
-
+  const points = await AsyncStorage.getItem(TOTAL_POINTS_KEY);
+  
   const map: Record<string, Set<string>> = {};
   for (const x of days) {
     if (!x?.date || !x?.sadanaId) continue;
@@ -12,6 +16,7 @@ export function sadanaSyncPayload(args: { days: LogItem[] }) {
   return {
     sadanas: Object.keys(map).map((date) => ({
       date,
+      points,
       optedSadanas: Array.from(map[date]),
     })),
   };

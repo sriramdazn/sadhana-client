@@ -5,11 +5,9 @@ import Screen from "@/components/Screen";
 import GlassCard from "@/components/GlassCard";
 import { theme } from "@/constants/theme";
 import {
-  getUserId,
   requestEmailOtp,
   requestLogout,
   setDecayPoints,
-  verifyEmailOtp,
 } from "@/services/auth.service";
 import {
   clearSession,
@@ -23,9 +21,8 @@ import { emitAuthChanged } from "@/utils/authEvents";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { COMPLETED_KEY, HOME_DAY_KEY, JOURNEY_KEY, TOTAL_POINTS_KEY } from "@/constants/constant";
 import { todayIso } from "@/utils/todayDate";
-import { sadanaSyncPayload } from "@/utils/sadhanaPayload";
-import { useGuestStorage } from "@/hooks/useGuestStorage";
 import OtpBox from "@/components/OtpBox";
+import { useGuestStorage } from "@/hooks/useGuestStorage";
 
 const DEFAULT_DECAY = -50;
 
@@ -38,17 +35,13 @@ const SettingsScreen: React.FC = () => {
     "default"
   );
   const [email, setEmail] = useState("");
-
-  
   const [otp, setOtp] = useState("");
   const [otpId, setOtpId] = useState<string | null>(null);
   const [lastEmail, setLastEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [dailyDecay, setDailyDecay] = useState<number>(DEFAULT_DECAY);
   const [hydrated, setHydrated] = useState(false);
-
   const { refresh } = useAuthStatus();
-
   const patchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -61,25 +54,20 @@ const SettingsScreen: React.FC = () => {
   useEffect(() => {
     const init = async () => {
       const session = await getSession();
-
       if (session?.token && session.userId) {
         setStage("done");
       } else {
         setStage("default");
       }
-
       // Always hydrate slider from local storage
       if (typeof session.decayPoints === "number") {
         setDailyDecay(session.decayPoints);
       } else {
         setDailyDecay(DEFAULT_DECAY);
       }
-
       setHydrated(true); // allow slider & button area to render (no flicker)
     };
-
     init();
-
     return () => {
       if (patchTimer.current) clearTimeout(patchTimer.current);
     };
@@ -104,19 +92,15 @@ const SettingsScreen: React.FC = () => {
    */
   const setPoints = async (value: number) => {
     setDailyDecay(value);
-
     // Persist locally as single source of truth
     await saveSession({ decayPoints: value });
-
     // Debounce PATCH when logged in
     if (patchTimer.current) clearTimeout(patchTimer.current);
     patchTimer.current = setTimeout(async () => {
       try {
         const session = await getSession();
         if (!session?.token) return; // logged out — skip API
-
         await setDecayPoints({ decayPoints: value }, session.token);
-
         // Keep session in sync
         await saveSession({
           token: session.token,
@@ -130,7 +114,6 @@ const SettingsScreen: React.FC = () => {
       }
     }, 400);
   };
-
   const requestOtp = async (targetEmail: string) => {
     setLoading(true);
     try {
@@ -144,12 +127,10 @@ const SettingsScreen: React.FC = () => {
       setLoading(false);
     }
   };
-
   const handleUseLastEmail = () => {
     if (!lastEmail) return;
     requestOtp(lastEmail);
   };
-
   const handleUseNewEmail = () => {
     if (!/.+@.+\..+/.test(email)) {
       alert("Please enter a valid email");
@@ -157,80 +138,11 @@ const SettingsScreen: React.FC = () => {
     }
     requestOtp(email);
   };
-
-  const handleOtpVerify = async () => {
-    if (!otpId) {
-      alert("Missing otpId");
-      return;
-    }
-    if (!/^\d{4,6}$/.test(otp)) {
-      alert("Enter valid OTP");
-      return;
-    }
-    setLoading(true);
-    try {
-      const preSession = await getSession();
-      const storedDecay = preSession.decayPoints;
-      // const res = await verifyEmailOtp({ otpId, otp: Number(otp) });
-
-      const journey = (await useGuestStorage.getJourney()) ?? [];
-      const payload = sadanaSyncPayload({ days: journey });
-      const res = await verifyEmailOtp({ otpId, otp: Number(otp), ...payload });
-     
-
-      const user = await getUserId(res.token);
-
-      // Save basic session first
-      await saveSession({
-        token: res.token,
-        email,
-        userId: user.id,
-        isLoggedIn: true,
-      });
-
-      // Prefer locally stored decay; else server; else current UI
-      let nextDecay =
-        typeof storedDecay === "number"
-          ? storedDecay
-          : typeof user.decayPoints === "number"
-          ? user.decayPoints
-          : dailyDecay;
-
-      try {
-        // Push preferred value to server
-        await setDecayPoints({ decayPoints: storedDecay }, res.token);
-      } catch (pushErr) {
-        console.log("Failed pushing local decay", pushErr);
-        // fallback to server value if available
-        if (typeof user.decayPoints === "number") {
-          nextDecay = user.decayPoints;
-        }
-      }
-
-      // Persist final decay & update UI
-      await saveSession({
-        token: res.token,
-        email,
-        userId: user.id,
-        isLoggedIn: true,
-        decayPoints: storedDecay,
-      });
-      setDailyDecay(storedDecay);
-
-      emitAuthChanged();
-      setStage("done");
-    } catch (err: any) {
-      alert(err?.message || "OTP verification failed");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   /** Logout:
-   *  - Logout (if token exists)
-   *  - Clear session keys
-   *  - Re-save only decayPoints (keep guest continuity)
-   */
+ *  - Logout (if token exists)
+ *  - Clear session keys
+ *  - Re-save only decayPoints (keep guest continuity)
+ */
   const handleLogout = async () => {
     try {
       setLoading(true);
@@ -238,15 +150,19 @@ const SettingsScreen: React.FC = () => {
       if (session?.token) {
         await requestLogout(session.token);
       }
-
       await clearSession();
       await saveSession({ decayPoints: -50, isLoggedIn: false });
       await AsyncStorage.multiSet([
         [COMPLETED_KEY, JSON.stringify({})],
-        [TOTAL_POINTS_KEY, "50"], 
+        [TOTAL_POINTS_KEY, "0"],
         [HOME_DAY_KEY, todayIso()],
       ]);
-      await AsyncStorage.removeItem(JOURNEY_KEY);
+      await AsyncStorage.multiRemove([
+        HOME_DAY_KEY,
+        JOURNEY_KEY,            
+        useGuestStorage.KEYS.home,
+        useGuestStorage.KEYS.journey,
+      ]);
       setDailyDecay(-50);
       emitAuthChanged();
       refresh();
@@ -260,8 +176,6 @@ const SettingsScreen: React.FC = () => {
       setLoading(false);
     }
   };
-
-
   return (
     <Screen>
       <View style={styles.container}>
@@ -276,33 +190,31 @@ const SettingsScreen: React.FC = () => {
               disabled={loading}
               loading={!hydrated || loading}
             />
-
-         
-<View style={styles.buttonArea}>
-  {!hydrated ? (
-    <SkeletonButton />   // show skeleton ONLY during first load
-  ) : stage === "default" ? (
-    <Button
-      type="primary"
-      size="large"
-      style={styles.mainButton}
-      onClick={() => setStage("email")}
-      loading={loading}
-    >
-      Save to Cloud
-    </Button>
-  ) : stage === "done" ? (
-    <Button
-      type="primary"
-      size="large"
-      style={styles.mainButton}
-      onClick={handleLogout}
-      loading={loading}
-    >
-      Logout
-    </Button>
-  ) : null}
-</View>
+            <View style={styles.buttonArea}>
+              {!hydrated ? (
+                <SkeletonButton />   // show skeleton
+              ) : stage === "default" ? (
+                <Button
+                  type="primary"
+                  size="large"
+                  style={styles.mainButton}
+                  onClick={() => setStage("email")}
+                  loading={loading}
+                >
+                  Save to Cloud
+                </Button>
+              ) : stage === "done" ? (
+                <Button
+                  type="primary"
+                  size="large"
+                  style={styles.mainButton}
+                  onClick={handleLogout}
+                  loading={loading}
+                >
+                  Logout
+                </Button>
+              ) : null}
+            </View>
 
             {stage === "email" && (
               <>
@@ -312,10 +224,8 @@ const SettingsScreen: React.FC = () => {
                     <Text style={styles.ctaEmail}>{masked}</Text>
                   </Pressable>
                 )}
-
                 <View style={styles.inputBlock}>
                   <Text style={styles.label}>Enter Email</Text>
-
                   <Input
                     placeholder="you@example.com"
                     size="large"
@@ -324,7 +234,6 @@ const SettingsScreen: React.FC = () => {
                     onChange={(e) => setEmail(e.target.value)}
                     disabled={loading}
                   />
-
                   <Button
                     type="primary"
                     size="large"
@@ -337,39 +246,14 @@ const SettingsScreen: React.FC = () => {
                 </View>
               </>
             )}
-
             {stage === "otp" && (
-              // <View style={styles.inputBlock}>
-              //   <Text style={styles.label}>Enter OTP</Text>
-
-              //   <Input
-              //     placeholder="Enter 6-digit OTP"
-              //     maxLength={6}
-              //     size="large"
-              //     style={styles.input}
-              //     value={otp}
-              //     onChange={(e) => setOtp(e.target.value)}
-              //     disabled={loading}
-              //   />
-
-              //   <Button
-              //     type="primary"
-              //     size="large"
-              //     style={styles.mainButton}
-              //     onClick={handleOtpVerify}
-              //     loading={loading}
-              //   >
-              //     Verify
-              //   </Button>
-              // </View>
               <OtpBox
-              email={email}
-              otpId={otpId}
-              dailyDecay={dailyDecay}
-              onSetDailyDecay={(value:number) => setDailyDecay(value)}
-              onSetStage={(value:TStage) => {setStage(value)}}
-            />
-
+                email={email}
+                otpId={otpId}
+                dailyDecay={dailyDecay}
+                onSetDailyDecay={(value: number) => setDailyDecay(value)}
+                onSetStage={(value: TStage) => { setStage(value) }}
+              />
             )}
           </View>
         </GlassCard>
@@ -378,8 +262,7 @@ const SettingsScreen: React.FC = () => {
   );
 };
 
-export default SettingsScreen;
-
+export default SettingsScreen; 
 const styles = StyleSheet.create({
   container: { flex: 1, paddingTop: 6 },
   title: {

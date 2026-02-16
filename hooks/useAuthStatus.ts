@@ -23,7 +23,7 @@ export function useAuthStatus() {
     refresh().catch(() => setReady(true));
   }, [refresh]);
 
-  // ✅ THIS IS THE KEY FIX: update auth everywhere when Settings logs in/out
+  // update auth everywhere when Settings logs in/out
   useEffect(() => {
     const unsub = onAuthChanged(() => {
       refresh().catch(() => {});
