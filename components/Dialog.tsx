@@ -1,16 +1,17 @@
-import React from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useRef } from "react";
+import { Animated, Dimensions, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { Button } from "@ant-design/react-native";
 import { theme } from "@/constants/theme";
 
 type Props = {
   visible: boolean;
-  title: string;
-  onCancel: () => void;
-  onConfirm: () => void;
+  title?: string;
+  onCancel?: () => void;
+  onConfirm?: () => void;
   cancelText?: string;
   confirmText?: string;
   confirmType?: "primary" | "warning" | "ghost";
+  children?: React.ReactNode; 
 };
 
 export default function Dialog({
@@ -21,15 +22,41 @@ export default function Dialog({
   cancelText = "Cancel",
   confirmText = "Confirm",
   confirmType = "warning",
+  children
 }: Props) {
 
   const isPrimary = confirmType === "primary";
+  const {height} = Dimensions.get("window");
+  const slideAnimation = useRef(new Animated.Value(height)).current;
+
+  useEffect(() => {
+    if(visible){
+      slideAnimation.setValue(height)
+      Animated.timing(slideAnimation,{
+        toValue: 0 ,
+        duration: 250,
+        useNativeDriver: true
+      }).start();
+    }
+    else{
+      Animated.timing(slideAnimation,{
+        toValue: 300 ,
+        duration: 200,
+        useNativeDriver: true
+      }).start();
+    }
+  },[visible])
 
   return (
-    <Modal transparent visible={visible} animationType="fade" onRequestClose={onCancel}>
+    <Modal transparent visible={visible} animationType="none" onRequestClose={onCancel}>
       <Pressable style={styles.backdrop} onPress={onCancel}>
-        <Pressable style={styles.modalCard} onPress={() => { }}>
+        <Pressable onPress={() => { }}>
+        <Animated.View style={[ styles.modalCard, { transform: [{ translateY: slideAnimation}] },]} >
           <Text style={styles.title}>{title}</Text>
+
+          {children && <View >{children}</View>}
+
+          {onConfirm && (
 
           <View style={styles.actions}>
         <Button
@@ -54,7 +81,9 @@ export default function Dialog({
           </Button>
 
       </View>
+     )}
 
+        </Animated.View>
         </Pressable>
       </Pressable>
     </Modal>
@@ -66,18 +95,18 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "rgba(15,12,30,0.75)",
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "flex-end",
     padding: 20,
   },
   modalCard: {
     width: "100%",
-    maxWidth: 340,
+    maxWidth: "100%",
 
     borderRadius: 22,
 
     backgroundColor: "rgba(42,36,78,0.96)",
 
-    paddingVertical: 22,
+    paddingVertical: 28,
     paddingHorizontal: 18,
 
     borderWidth: 1,
@@ -89,6 +118,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 0 },
 
     elevation: 20,
+    marginBottom: 50
   },
 
   title: {
