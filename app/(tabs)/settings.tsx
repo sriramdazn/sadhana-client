@@ -23,6 +23,8 @@ import { COMPLETED_KEY, HOME_DAY_KEY, JOURNEY_KEY, TOTAL_POINTS_KEY } from "@/co
 import { todayIso } from "@/utils/todayDate";
 import OtpBox from "@/components/OtpBox";
 import { useGuestStorage } from "@/hooks/useGuestStorage";
+import Dialog from "@/components/Dialog";
+import { useFocusEffect } from "expo-router";
 
 const DEFAULT_DECAY = -50;
 
@@ -43,6 +45,7 @@ const SettingsScreen: React.FC = () => {
   const [hydrated, setHydrated] = useState(false);
   const { refresh } = useAuthStatus();
   const patchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [showPopup, setShowPopup ] = useState(false);
 
   useEffect(() => {
     getLastEmail().then((value) => {
@@ -72,6 +75,13 @@ const SettingsScreen: React.FC = () => {
       if (patchTimer.current) clearTimeout(patchTimer.current);
     };
   }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      setShowPopup(false);
+      setStage("default");
+    }, [])
+  );
 
   const masked = useMemo(
     () => (lastEmail ? maskEmail(lastEmail) : ""),
@@ -198,7 +208,11 @@ const SettingsScreen: React.FC = () => {
                   type="primary"
                   size="large"
                   style={styles.mainButton}
-                  onClick={() => setStage("email")}
+                  onClick={() => {
+                    setStage("email")
+                    setShowPopup(true)
+                  }
+                }
                   loading={loading}
                 >
                   Save to Cloud
@@ -215,6 +229,17 @@ const SettingsScreen: React.FC = () => {
                 </Button>
               ) : null}
             </View>
+
+            <Dialog 
+              visible={showPopup}
+              onCancel={() => {
+                setShowPopup(false);
+                setStage("default");
+                setEmail("");
+                setOtp("");
+                setOtpId(null);
+              }}
+            >
 
             {stage === "email" && (
               <>
@@ -252,9 +277,18 @@ const SettingsScreen: React.FC = () => {
                 otpId={otpId}
                 dailyDecay={dailyDecay}
                 onSetDailyDecay={(value: number) => setDailyDecay(value)}
-                onSetStage={(value: TStage) => { setStage(value) }}
+                onSetStage={(value: TStage) => {
+                  if (value === "done") {
+                    setShowPopup(false);
+                    setStage("done");
+                  } else {
+                    setStage(value);
+                  }
+                }}
+                
               />
             )}
+            </Dialog>
           </View>
         </GlassCard>
       </View>
