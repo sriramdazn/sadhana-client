@@ -1,10 +1,12 @@
 import { Tabs } from "expo-router";
 import { BlurView } from "expo-blur";
 import { AntDesign } from "@expo/vector-icons";
+import { ToastProvider } from "@/components/Toast";
 
 
 export default function TabLayout() {
   return (
+    <ToastProvider>
     <Tabs
       screenOptions={{
         headerShown: false,
@@ -85,5 +87,6 @@ export default function TabLayout() {
         }}
       />
     </Tabs>
+    </ToastProvider>
   );
 }

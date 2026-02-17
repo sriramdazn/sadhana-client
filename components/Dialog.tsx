@@ -94,8 +94,7 @@ const styles = StyleSheet.create({
   modalCard: {
     width: Dimensions.get("window").width - 40,
 
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
+    borderRadius: 12,
 
     backgroundColor: "rgba(42,36,78,0.96)",
 
@@ -111,6 +110,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 0 },
 
     elevation: 20,
+    marginBottom: 80
   },
   backdrop: {
     flex: 1,

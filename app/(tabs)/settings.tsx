@@ -31,6 +31,8 @@ import OtpBox from "@/components/OtpBox";
 import { useGuestStorage } from "@/hooks/useGuestStorage";
 import Dialog from "@/components/Dialog";
 import { useFocusEffect } from "expo-router";
+import { ScrollView } from "react-native-gesture-handler";
+import { useToast } from "@/components/Toast";
 
 const DEFAULT_DECAY = -50;
 
@@ -52,6 +54,9 @@ const SettingsScreen: React.FC = () => {
   const [showPopup, setShowPopup] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [loadingAction, setLoadingAction] = useState<LoadingAction>(null);
+  const scrollRef = useRef<ScrollView>(null);
+
+  const toast = useToast(); 
 
   useEffect(() => {
     getLastEmail().then((value) => value && setLastEmail(value));
@@ -137,7 +142,7 @@ const SettingsScreen: React.FC = () => {
       setOtpId(res.otpId);
       setStage("otp");
     } catch (err: any) {
-      alert(err?.message || "Failed to request OTP");
+      toast.show("error", "Failed to request OTP");
     } finally {
       setLoadingAction(null);
     }
@@ -172,7 +177,7 @@ const SettingsScreen: React.FC = () => {
       setOtpId(null);
       setStage("default");
     } catch (err: any) {
-      alert(err?.message || "Logout failed");
+      toast.show("error", "Logout Failed");
     } finally {
       setLoadingAction(null);
     }
@@ -200,8 +205,10 @@ const SettingsScreen: React.FC = () => {
       ]);
 
       setDailyDecay(-50);
+      toast.show("success", "Reset Successful");
+
     } catch (err: any) {
-      alert(err?.message || "Reset failed");
+      toast.show("error", "Reset Failed");
     } finally {
       setLoadingAction(null);
     }
@@ -210,6 +217,11 @@ const SettingsScreen: React.FC = () => {
   return (
     <Screen>
       <View style={styles.container}>
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={{ paddingBottom: 58 }}
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.title}>Settings</Text>
 
         <GlassCard style={styles.card}>
@@ -281,6 +293,7 @@ const SettingsScreen: React.FC = () => {
             </View>
           </View>
         </GlassCard>
+        </ScrollView>
 
         <Dialog
           visible={showPopup}
