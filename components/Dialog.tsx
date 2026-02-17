@@ -73,8 +73,8 @@ export default function Dialog({
             onPress={onConfirm}
             style={
               isPrimary
-                ? { ...styles.btnBase, ...styles.confirmBtn } // HOME
-                : styles.btnBase                               // JOURNEY 
+                ? { ...styles.btnBase, ...styles.confirmBtn }
+                : styles.btnBase                       
             }
           >
             {confirmText}
@@ -91,18 +91,11 @@ export default function Dialog({
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: "rgba(15,12,30,0.75)",
-    alignItems: "center",
-    justifyContent: "flex-end",
-    padding: 20,
-  },
   modalCard: {
-    width: "100%",
-    maxWidth: "100%",
+    width: Dimensions.get("window").width - 40,
 
-    borderRadius: 22,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
 
     backgroundColor: "rgba(42,36,78,0.96)",
 
@@ -118,7 +111,14 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 0 },
 
     elevation: 20,
-    marginBottom: 50
+  },
+  backdrop: {
+    flex: 1,
+    backgroundColor: "rgba(15,12,30,0.75)",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    paddingHorizontal: 0,
+    paddingBottom: 0,
   },
 
   title: {
@@ -146,17 +146,16 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.35)",
-    
   },
 
   confirmBtn: {
     backgroundColor: "rgba(155,93,229,0.95)",
     borderWidth: 0,
-    color: "red"
+    color: "red",
   },
-  
+
   cancelText: {
     color: "rgba(255,255,255,0.9)",
-    fontSize: 17
-  }
+    fontSize: 17,
+  },
 });

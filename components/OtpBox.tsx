@@ -129,6 +129,7 @@ const styles = StyleSheet.create({
         height: 48,
         fontSize: 18,
         backgroundColor: 'rgba(155, 93, 229, 0.95)',
+        color: "#fff",
     },
     container: {
         paddingVertical: 20,

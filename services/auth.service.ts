@@ -1,4 +1,4 @@
-import { GET_USER_PATH, LOGOUT_USER_PATH, REQUEST_OTP_PATH, VERIFY_OTP_PATH } from "@/constants/api.constant";
+import { GET_USER_PATH, LOGOUT_USER_PATH, REQUEST_OTP_PATH, RESET_USER_PATH, VERIFY_OTP_PATH } from "@/constants/api.constant";
 import { http } from "./http";
 
 export type RequestOtpResponse = {
@@ -23,6 +23,8 @@ export type GetUserResponse = {
 export type LogoutUserResponse = {
   message: string
 };
+
+export type ResetUserResponse = GetUserResponse;
 
 export async function requestEmailOtp(email: string) {
   return http.post<RequestOtpResponse>(REQUEST_OTP_PATH, { email });
@@ -63,6 +65,18 @@ export async function setDecayPoints(
       headers: {
         Authorization: `Bearer ${token}`
       }
+    }
+  );
+}
+
+export async function setResetUser(token: string) {
+  return http.post<ResetUserResponse>(
+    RESET_USER_PATH,
+    {},
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
     }
   );
 }

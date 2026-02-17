@@ -8,7 +8,6 @@ type Props = {
   value: number;
   onChange: (v: number) => void;
   disabled?: boolean;
-  /** when true, shows a skeleton and defers rendering of the real UI */
   loading?: boolean;
 };
 
@@ -20,16 +19,15 @@ const DailyDecaySlider: React.FC<Props> = ({
 }) => {
   const frownStyle: React.CSSProperties = {
     ...iconBase,
-    ...(value < 50 ? iconActive : {}),
+    ...(value < -50 ? iconActive : {}),
   };
   const smileStyle: React.CSSProperties = {
     ...iconBase,
-    ...(value >= 50 ? iconActive : {}),
+    ...(value >= -51 ? iconActive : {}),
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Daily Decay</Text>
 
       {loading ? (
         <View style={styles.row}>
@@ -41,6 +39,7 @@ const DailyDecaySlider: React.FC<Props> = ({
           <View style={[styles.skeletonIcon]} />
         </View>
       ) : (
+        <>
         <View style={styles.row}>
           <FrownOutlined style={frownStyle} />
           <View style={styles.sliderWrapper}>
@@ -52,10 +51,11 @@ const DailyDecaySlider: React.FC<Props> = ({
               onChange={(v) => onChange(Number(v))}
               disabled={disabled}
             />
-            <Text style={styles.pointsText}>{value} pts</Text>
           </View>
           <SmileOutlined style={smileStyle} />
         </View>
+        <Text style={styles.pointsText}>{value} pts</Text>
+</>        
       )}
     </View>
   );
@@ -78,7 +78,7 @@ const styles = StyleSheet.create({
   pointsText: {
     color: theme.colors.text,
     fontWeight: "900",
-    fontSize: 13,
+    fontSize: 15,
     textAlign: "center",
   },
   row: {
