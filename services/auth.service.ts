@@ -26,57 +26,38 @@ export type LogoutUserResponse = {
 
 export type ResetUserResponse = GetUserResponse;
 
-export async function requestEmailOtp(email: string) {
-  return http.post<RequestOtpResponse>(REQUEST_OTP_PATH, { email });
+export async function requestEmailOtp(email: string, signal?: AbortSignal) {
+  return http.post<RequestOtpResponse>(REQUEST_OTP_PATH, { email }, { signal });
 }
 
-export async function verifyEmailOtp(payload: { otpId: string; otp: number, sadanas: []}) {
-  return http.post<VerifyOtpResponse>(VERIFY_OTP_PATH, payload);
+export async function verifyEmailOtp(
+  payload: { otpId: string; otp: number; sadhana: [] },
+  signal?: AbortSignal
+) {
+  return http.post<VerifyOtpResponse>(VERIFY_OTP_PATH, payload, { signal });
 }
 
 export async function getUserId(token: string) {
   return http.get<GetUserResponse>(GET_USER_PATH, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+    headers: { Authorization: `Bearer ${token}` },
   });
 }
 
 export async function requestLogout(token: string) {
-  return http.post<LogoutUserResponse>(
-    LOGOUT_USER_PATH,
-    {},
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    }
-  );
+  return http.post<LogoutUserResponse>(LOGOUT_USER_PATH, {}, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
 }
 
-export async function setDecayPoints(
-  payload: { decayPoints: number },
-  token: string
-) {
-  return http.patch<GetUserResponse>(
-    GET_USER_PATH,
-    payload,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    }
-  );
+export async function setDecayPoints(payload: { decayPoints: number }, token: string) {
+  return http.patch<GetUserResponse>(GET_USER_PATH, payload, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
 }
 
-export async function setResetUser(token: string) {
-  return http.post<ResetUserResponse>(
-    RESET_USER_PATH,
-    {},
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    }
-  );
+export async function setResetUser(token: string, signal?: AbortSignal) {
+  return http.post<ResetUserResponse>(RESET_USER_PATH, {}, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal,
+  });
 }

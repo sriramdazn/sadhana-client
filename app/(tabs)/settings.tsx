@@ -31,8 +31,6 @@ import OtpBox from "@/components/OtpBox";
 import { useGuestStorage } from "@/hooks/useGuestStorage";
 import Dialog from "@/components/Dialog";
 import { useFocusEffect } from "expo-router";
-import { ScrollView } from "react-native-gesture-handler";
-import { useToast } from "@/components/Toast";
 
 const DEFAULT_DECAY = -50;
 
@@ -41,6 +39,7 @@ type LoadingAction = "otp" | "logout" | "reset" | "decay" | null;
 const SkeletonButton: React.FC = () => <View style={styles.skeletonButton} />;
 
 export type TStage = "default" | "email" | "otp" | "done";
+
 const SettingsScreen: React.FC = () => {
   const [stage, setStage] = useState<TStage>("default");
   const [email, setEmail] = useState("");
@@ -54,9 +53,8 @@ const SettingsScreen: React.FC = () => {
   const [showPopup, setShowPopup] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [loadingAction, setLoadingAction] = useState<LoadingAction>(null);
-  const scrollRef = useRef<ScrollView>(null);
-
-  const toast = useToast(); 
+  const otpControllerRef = useRef<AbortController | null>(null);
+  const resetControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     getLastEmail().then((value) => value && setLastEmail(value));
@@ -65,31 +63,19 @@ const SettingsScreen: React.FC = () => {
   useEffect(() => {
     const init = async () => {
       const session = await getSession();
-
       setStage(session?.token && session.userId ? "done" : "default");
-
       setDailyDecay(
         typeof session?.decayPoints === "number"
           ? session.decayPoints
           : DEFAULT_DECAY
       );
-
       setHydrated(true);
     };
-
     init();
-
     return () => {
       if (patchTimer.current) clearTimeout(patchTimer.current);
     };
   }, []);
-
-  // useFocusEffect(
-  //   React.useCallback(() => {
-  //     setShowPopup(false);
-  //     setStage("default");
-  //   }, [])
-  // );
 
   useFocusEffect(
     React.useCallback(() => {
@@ -109,6 +95,44 @@ const SettingsScreen: React.FC = () => {
     );
   }
 
+  const abortAndClear = (ref: React.MutableRefObject<AbortController | null>) => {
+    ref.current?.abort();
+    ref.current = null;
+  };
+
+  const newController = (ref: React.MutableRefObject<AbortController | null>): AbortController => {
+    abortAndClear(ref);
+    const ctrl = new AbortController();
+    ref.current = ctrl;
+    return ctrl;
+  };
+
+  const handlePopupCancel = () => {
+    abortAndClear(otpControllerRef);
+    setShowPopup(false);
+    setStage("default");
+    setEmail("");
+    setOtpId(null);
+  };
+
+  const requestOtp = async (targetEmail: string) => {
+    const { signal } = newController(otpControllerRef);
+    setLoadingAction("otp");
+    try {
+      const res = await requestEmailOtp(targetEmail, signal);
+      if (signal.aborted) return;
+      setEmail(targetEmail);
+      setOtpId(res.otpId);
+      setStage("otp");
+    } catch (err: any) {
+      if (err?.name === "AbortError") return;
+      alert(err?.message || "Failed to request OTP");
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
+
   const setPoints = async (value: number) => {
     setDailyDecay(value);
     await saveSession({ decayPoints: value });
@@ -117,15 +141,9 @@ const SettingsScreen: React.FC = () => {
       try {
         const session = await getSession();
         if (!session?.token) return;
-
         setLoadingAction("decay");
-
         await setDecayPoints({ decayPoints: value }, session.token);
-
-        await saveSession({
-          ...session,
-          decayPoints: value,
-        });
+        await saveSession({ ...session, decayPoints: value });
       } catch (e) {
         console.log("Failed to update decay points", e);
       } finally {
@@ -134,42 +152,25 @@ const SettingsScreen: React.FC = () => {
     }, 400);
   };
 
-  const requestOtp = async (targetEmail: string) => {
-    setLoadingAction("otp");
-    try {
-      const res = await requestEmailOtp(targetEmail);
-      setEmail(targetEmail);
-      setOtpId(res.otpId);
-      setStage("otp");
-    } catch (err: any) {
-      toast.show("error", "Failed to request OTP");
-    } finally {
-      setLoadingAction(null);
-    }
-  };
 
   const handleLogout = async () => {
     setLoadingAction("logout");
     try {
       const session = await getSession();
       if (session?.token) await requestLogout(session.token);
-
       await clearSession();
       await saveSession({ decayPoints: -50, isLoggedIn: false });
-
       await AsyncStorage.multiSet([
         [COMPLETED_KEY, JSON.stringify({})],
         [TOTAL_POINTS_KEY, "0"],
         [HOME_DAY_KEY, todayIso()],
       ]);
-
       await AsyncStorage.multiRemove([
         HOME_DAY_KEY,
         JOURNEY_KEY,
         useGuestStorage.KEYS.home,
         useGuestStorage.KEYS.journey,
       ]);
-
       setDailyDecay(-50);
       emitAuthChanged();
       refresh();
@@ -177,38 +178,37 @@ const SettingsScreen: React.FC = () => {
       setOtpId(null);
       setStage("default");
     } catch (err: any) {
-      toast.show("error", "Logout Failed");
+      alert(err?.message || "Logout failed");
     } finally {
       setLoadingAction(null);
     }
   };
 
   const handleResetUser = async () => {
+    const { signal } = newController(resetControllerRef);
     setLoadingAction("reset");
     try {
       const session = await getSession();
-      if (session?.token) await setResetUser(session.token);
+      if (signal.aborted) return;
+      if (session?.token) await setResetUser(session.token, signal);
+      if (signal.aborted) return;
 
       await saveSession({ decayPoints: -50, isLoggedIn: false });
-
       await AsyncStorage.multiSet([
         [COMPLETED_KEY, JSON.stringify({})],
         [TOTAL_POINTS_KEY, "0"],
         [HOME_DAY_KEY, todayIso()],
       ]);
-
       await AsyncStorage.multiRemove([
         HOME_DAY_KEY,
         JOURNEY_KEY,
         useGuestStorage.KEYS.home,
         useGuestStorage.KEYS.journey,
       ]);
-
       setDailyDecay(-50);
-      toast.show("success", "Reset Successful");
-
     } catch (err: any) {
-      toast.show("error", "Reset Failed");
+      if (err?.name === "AbortError") return;
+      alert(err?.message || "Reset failed");
     } finally {
       setLoadingAction(null);
     }
@@ -217,11 +217,6 @@ const SettingsScreen: React.FC = () => {
   return (
     <Screen>
       <View style={styles.container}>
-      <ScrollView
-        ref={scrollRef}
-        contentContainerStyle={{ paddingBottom: 58 }}
-        showsVerticalScrollIndicator={false}
-      >
         <Text style={styles.title}>Settings</Text>
 
         <GlassCard style={styles.card}>
@@ -232,7 +227,6 @@ const SettingsScreen: React.FC = () => {
                 Adjust how many points you lose automatically every day.
               </Text>
             </View>
-
             <View style={styles.sliderCard}>
               <DailyDecaySlider
                 value={dailyDecay}
@@ -293,16 +287,10 @@ const SettingsScreen: React.FC = () => {
             </View>
           </View>
         </GlassCard>
-        </ScrollView>
 
         <Dialog
           visible={showPopup}
-          onCancel={() => {
-            setShowPopup(false);
-            setStage("default");
-            setEmail("");
-            setOtpId(null);
-          }}
+          onCancel={handlePopupCancel}
         >
           {stage === "email" && (
             <>
@@ -326,7 +314,6 @@ const SettingsScreen: React.FC = () => {
                   onChange={(e) => setEmail(e.target.value)}
                   disabled={loadingAction === "otp"}
                 />
-
                 <Button
                   type="primary"
                   size="large"
@@ -345,12 +332,16 @@ const SettingsScreen: React.FC = () => {
               email={email}
               otpId={otpId}
               dailyDecay={dailyDecay}
+              onControllerReady={(ctrl) => { otpControllerRef.current = ctrl; }}
               onSetDailyDecay={(v) => setDailyDecay(v)}
               onSetStage={(v) => {
                 if (v === "done") {
                   setShowPopup(false);
                   setStage("done");
-                } else setStage(v);
+                } else {
+                  abortAndClear(otpControllerRef);
+                  setStage(v);
+                }
               }}
             />
           )}
@@ -358,13 +349,15 @@ const SettingsScreen: React.FC = () => {
 
         <Dialog
           visible={showResetDialog}
-          onCancel={() => setShowResetDialog(false)}
+          onCancel={() => {
+            abortAndClear(resetControllerRef);
+            setShowResetDialog(false);
+          }}
         >
           <View style={styles.inputBlock}>
             <Text style={styles.label}>
               Are you sure you want to reset all user data?
             </Text>
-
             <Button
               type="primary"
               size="large"
@@ -413,12 +406,8 @@ const styles = StyleSheet.create({
     fontSize: 18,
     backgroundColor: "rgba(155, 93, 229, 0.95)",
   },
-  resetBtn: {
-    marginTop: 15,
-  },
-  buttonArea: {
-    width: "100%",
-  },
+  resetBtn: { marginTop: 15 },
+  buttonArea: { width: "100%" },
   skeletonButton: {
     height: 48,
     borderRadius: 30,
@@ -426,7 +415,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.border,
   },
-
   ctaCard: {
     width: "100%",
     paddingVertical: 18,
@@ -443,27 +431,19 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     marginLeft: 4,
   },
-
-  sectionBlock: {
-    paddingVertical: 10,
-    gap: 16,
-  },
-  decayBlock: {
-    marginBottom: 100,
-  },
+  sectionBlock: { paddingVertical: 10, gap: 16 },
+  decayBlock: { marginBottom: 100 },
   sectionTitle: {
     color: theme.colors.text,
     fontSize: 18,
     fontWeight: "800",
     marginBottom: 2,
   },
-
   sectionDescription: {
     color: theme.colors.muted,
     fontSize: 14,
     marginBottom: 8,
   },
-
   sliderCard: {
     paddingVertical: 18,
     paddingHorizontal: 16,
@@ -472,27 +452,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)",
   },
-
-  buttonsWrapper: {
-    marginTop: 4,
-    gap: 14,
-  },
-
+  buttonsWrapper: { marginTop: 4, gap: 14 },
   resetButton: {
     borderRadius: 30,
     height: 48,
     fontSize: 18,
     backgroundColor: "rgba(255, 90, 90, 0.85)",
   },
-  sectionContainer: {
-    gap: 18,
-  },
-
-  sectionHeader: {
-    gap: 6,
-  },
-
-  accountCard: {
-    marginTop: 28,
-  },
+  sectionContainer: { gap: 18 },
+  sectionHeader: { gap: 6 },
+  accountCard: { marginTop: 28 },
 });
