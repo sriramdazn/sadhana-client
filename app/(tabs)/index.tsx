@@ -18,6 +18,7 @@ import { todayIso, isoToDayLabel, isoDaysAgo, toIsoForSelectedDay } from "@/util
 import { useIsFocused } from "@react-navigation/native";
 import { Sadhana } from "@/components/types/types";
 import { getSession } from "@/utils/storage";
+import { InteractionManager } from "react-native";
 import { CompletedDailyCounts, migrateCompletedStorageToDailyCounts } from "@/utils/completedDailyCounts";
 
 export default function HomeScreen() {
@@ -123,7 +124,9 @@ export default function HomeScreen() {
 
       setShowStars(true);
       setShowConfirm(false);
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
+      InteractionManager.runAfterInteractions(() => {
+        scrollRef.current?.scrollTo({ y: 0, animated: true });
+      });
     } catch (e: any) {
       alert(e?.message || "Failed to add sadhana");
     } finally {

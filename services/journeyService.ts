@@ -5,16 +5,125 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const JOURNEY_EXTRAS_KEY = `${JOURNEY_KEY}:extras`;
 
-function normalizeLogItem(item: SadhanaLogs): SadhanaLogs {
-  return { dateTime: item?.dateTime || "", sadanaId: item?.sadanaId || "" };
+export function createJourneyService({
+  isLoggedIn = false,
+  accessToken = null,
+}: JourneyService = {}) {
+  const token = accessToken;
+  const canUseRemote = isLoggedIn && !!token;
+
+  async function loadRemoteOnly(): Promise<SadhanaLogs[]> {
+    const res = await apiJson<RemoteTrackerResponse>(
+      `${API_BASE_URL}/v1/sadana-tracker`,
+      "GET",
+      token as string
+    );
+    return flattenRemote(res);
+  }
+
+  return {
+    async load(): Promise<SadhanaLogs[]> {
+      // show cached journey first
+      const cached = await readLocalJourney();
+      if (canUseRemote) {
+        try {
+          const [remote, extras] = await Promise.all([loadRemoteOnly(), readExtras()]);
+          const merged = mergeLogs(remote, extras);
+          await writeLocalJourney(merged);
+          return merged;
+        } catch {
+          return cached;
+        }
+      }
+      return cached;
+    },
+    
+    async addItem(item: SadhanaLogs): Promise<SadhanaLogs[]> {
+      const normalized = normalizeLogItem(item);
+    
+      if (canUseRemote) {
+        const extras = await readExtras();
+    
+        try {
+          // Try first-time POST
+          await apiJson(
+            `${API_BASE_URL}/v1/sadana-tracker`,
+            "POST",
+            token as string,
+            normalized
+          );
+          // After successful POST, fetch latest remote once
+          const freshRemote = await loadRemoteOnly();
+          const merged = mergeLogs(freshRemote, extras);
+          await writeLocalJourney(merged);
+          return merged;
+        } catch (e: any) {
+          // If server says "already opted", this is the 2nd time (or duplicate)
+          if (isAlreadyOptedError(e)) {
+            const nextExtras = addLocalWithCap(extras, normalized, 1);
+            await writeExtras(nextExtras);
+            // Try to show remote + extras (if GET fails, at least show extras)
+            try {
+              const remote = await loadRemoteOnly();
+              const merged = mergeLogs(remote, nextExtras);
+              await writeLocalJourney(merged); 
+              return merged;
+            } catch {
+              return mergeLogs([], nextExtras);
+            }
+          }
+          // real error
+          throw e;
+        }
+      }
+    
+      // Guest flow unchanged
+      const prev = await readLocalJourney();
+      const next = addLocalWithCap(prev, normalized, 2);
+      await writeLocalJourney(next);
+      return next;
+    },
+    
+
+    async deleteItem(item: SadhanaLogs): Promise<SadhanaLogs[]> {
+      const normalized = normalizeLogItem(item);
+
+      if (canUseRemote) {
+        const [remote, extras] = await Promise.all([loadRemoteOnly(), readExtras()]);
+
+        // delete extra first (2 -> 1)
+        const extraIdx = extras.findIndex(
+          (x) => x.dateTime === normalized.dateTime && x.sadanaId === normalized.sadanaId
+        );
+        if (extraIdx >= 0) {
+          const nextExtras = extras.slice();
+          nextExtras.splice(extraIdx, 1);
+          await writeExtras(nextExtras);
+          return mergeLogs(remote, nextExtras);
+        }
+
+        await apiJson(
+          `${API_BASE_URL}/v1/sadana-tracker`,
+          "DELETE",
+          token as string,
+          normalized
+        );
+
+        const freshRemote = await loadRemoteOnly();
+        return mergeLogs(freshRemote, extras);
+      }
+
+      // Guest: remove only 1 occurrence
+      const prev = await readLocalJourney();
+      const next = removeOne(prev, normalized);
+      await writeLocalJourney(next);
+      return next;
+    },
+  };
 }
 
-function countOccurrences(logs: SadhanaLogs[], target: SadhanaLogs) {
-  const t = normalizeLogItem(target);
-  return logs.reduce((n, x) => {
-    const a = normalizeLogItem(x);
-    return n + (a.dateTime === t.dateTime && a.sadanaId === t.sadanaId ? 1 : 0);
-  }, 0);
+function normalizeLogItem(item: SadhanaLogs): SadhanaLogs {
+  return { dateTime: item?.dateTime || "", sadanaId: item?.sadanaId || "" };
 }
 
 function mergeLogs(remote: SadhanaLogs[], extras: SadhanaLogs[]) {
@@ -186,115 +295,4 @@ async function apiJson<T>(url: string, method: string, token: string, body?: unk
 function isAlreadyOptedError(e: unknown) {
   const msg = String((e as any)?.message || "");
   return msg.toLowerCase().includes("already opted");
-}
-
-export function createJourneyService({
-  isLoggedIn = false,
-  accessToken = null,
-}: JourneyService = {}) {
-  const token = accessToken;
-  const canUseRemote = isLoggedIn && !!token;
-
-  async function loadRemoteOnly(): Promise<SadhanaLogs[]> {
-    const res = await apiJson<RemoteTrackerResponse>(
-      `${API_BASE_URL}/v1/sadana-tracker`,
-      "GET",
-      token as string
-    );
-    return flattenRemote(res);
-  }
-
-  return {
-    async load(): Promise<SadhanaLogs[]> {
-      if (canUseRemote) {
-        const [remote, extras] = await Promise.all([loadRemoteOnly(), readExtras()]);
-        const merged = mergeLogs(remote, extras);
-        await writeLocalJourney(merged);
-        return merged;
-      }
-      return readLocalJourney();
-    },   
-
-    async addItem(item: SadhanaLogs): Promise<SadhanaLogs[]> {
-      const normalized = normalizeLogItem(item);
-    
-      if (canUseRemote) {
-        const extras = await readExtras();
-    
-        try {
-          // Try first-time POST
-          await apiJson(
-            `${API_BASE_URL}/v1/sadana-tracker`,
-            "POST",
-            token as string,
-            normalized
-          );
-          // After successful POST, fetch latest remote once
-          const freshRemote = await loadRemoteOnly();
-          const merged = mergeLogs(freshRemote, extras);
-          await writeLocalJourney(merged);
-          return merged;
-        } catch (e: any) {
-          // If server says "already opted", this is the 2nd time (or duplicate)
-          if (isAlreadyOptedError(e)) {
-            const nextExtras = addLocalWithCap(extras, normalized, 1);
-            await writeExtras(nextExtras);
-            // Try to show remote + extras (if GET fails, at least show extras)
-            try {
-              const remote = await loadRemoteOnly();
-              const merged = mergeLogs(remote, nextExtras);
-              await writeLocalJourney(merged); 
-              return merged;
-            } catch {
-              return mergeLogs([], nextExtras);
-            }
-          }
-          // real error
-          throw e;
-        }
-      }
-    
-      // Guest flow unchanged
-      const prev = await readLocalJourney();
-      const next = addLocalWithCap(prev, normalized, 2);
-      await writeLocalJourney(next);
-      return next;
-    },
-    
-
-    async deleteItem(item: SadhanaLogs): Promise<SadhanaLogs[]> {
-      const normalized = normalizeLogItem(item);
-
-      if (canUseRemote) {
-        const [remote, extras] = await Promise.all([loadRemoteOnly(), readExtras()]);
-
-        // delete extra first (2 -> 1)
-        const extraIdx = extras.findIndex(
-          (x) => x.dateTime === normalized.dateTime && x.sadanaId === normalized.sadanaId
-        );
-        if (extraIdx >= 0) {
-          const nextExtras = extras.slice();
-          nextExtras.splice(extraIdx, 1);
-          await writeExtras(nextExtras);
-          return mergeLogs(remote, nextExtras);
-        }
-
-        await apiJson(
-          `${API_BASE_URL}/v1/sadana-tracker`,
-          "DELETE",
-          token as string,
-          normalized
-        );
-
-        const freshRemote = await loadRemoteOnly();
-        return mergeLogs(freshRemote, extras);
-      }
-
-      // Guest: remove only 1 occurrence
-      const prev = await readLocalJourney();
-      const next = removeOne(prev, normalized);
-      await writeLocalJourney(next);
-      return next;
-    },
-  };
 }
