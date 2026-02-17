@@ -144,7 +144,7 @@ export default function HomeScreen() {
 
       <ScrollView
         ref={scrollRef}
-        contentContainerStyle={{ paddingBottom: 28 }}
+        contentContainerStyle={{ paddingBottom: 58 }}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.decayWrap}>

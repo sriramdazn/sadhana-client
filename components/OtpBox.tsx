@@ -20,62 +20,72 @@ type TProps = {
     dailyDecay: number;
     onSetDailyDecay: (value: number) => void;
     onSetStage: (value: TStage) => void;
+    onControllerReady: (controller: AbortController) => void;
 };
 
-const OtpBox = ({ email, otpId, dailyDecay, onSetDailyDecay, onSetStage }: TProps) => {
+const OtpBox = ({ email, otpId, dailyDecay, onSetDailyDecay, onSetStage, onControllerReady }: TProps) => {
     const [loading, setLoading] = useState(false);
     const otpRef = useRef<OtpInputRef>(null);
+    const controllerRef = useRef<AbortController>(new AbortController());
 
     useEffect(() => {
+        const controller = new AbortController();
+        controllerRef.current = controller;
+        onControllerReady(controller);
         otpRef.current?.onFocus();
-    }, [])
+
+        return () => {
+            controller.abort();
+        };
+    }, []);
 
     const handleOtpVerify = useCallback(async (otp: string) => {
-        if (!otpId) {
-            alert('Missing otpId');
-            return;
-        }
-        if (otp.length < OTP_LENGTH) {
-            alert('Enter valid OTP');
-            return;
-        }
+        if (!otpId) { alert('Missing otpId'); return; }
+        if (otp.length < OTP_LENGTH) { alert('Enter valid OTP'); return; }
+
+        const { signal } = controllerRef.current;
+
         setLoading(true);
         try {
             const preSession = await getSession();
+            if (signal.aborted) return;
+
             const storedDecay = preSession.decayPoints;
             const journey = (await useGuestStorage.getJourney()) ?? [];
-            const payload = await sadanaSyncPayload({ days: journey });
-            const res = await verifyEmailOtp({ otpId, otp: Number(otp), ...payload });
-            const user = await getUserId(res.token);
+            if (signal.aborted) return;
 
-            // Save basic session first
+            const payload = await sadanaSyncPayload({ days: journey });
+            if (signal.aborted) return;
+
+            const res = await verifyEmailOtp({ otpId, otp: Number(otp), ...payload }, signal);
+            if (signal.aborted) return;
+
+            const user = await getUserId(res.token);
+            if (signal.aborted) return;
+
             await saveSession({
                 token: res.token,
                 email,
                 userId: user.id,
                 isLoggedIn: true,
             });
+            if (signal.aborted) return;
 
-            // Prefer locally stored decay; else server; else current UI
             let nextDecay =
                 typeof storedDecay === 'number'
                     ? storedDecay
                     : typeof user.decayPoints === 'number'
-                      ? user.decayPoints
-                      : dailyDecay;
+                        ? user.decayPoints
+                        : dailyDecay;
 
             try {
-                // Push preferred value to server
                 await setDecayPoints({ decayPoints: nextDecay }, res.token);
             } catch (pushErr) {
                 console.log('Failed pushing local decay', pushErr);
-                // fallback to server value if available
-                if (typeof user.decayPoints === 'number') {
-                    nextDecay = user.decayPoints;
-                }
+                if (typeof user.decayPoints === 'number') nextDecay = user.decayPoints;
             }
+            if (signal.aborted) return;
 
-            // Persist final decay & update UI
             await saveSession({
                 token: res.token,
                 email,
@@ -83,21 +93,22 @@ const OtpBox = ({ email, otpId, dailyDecay, onSetDailyDecay, onSetStage }: TProp
                 isLoggedIn: true,
                 decayPoints: nextDecay,
             });
-            onSetDailyDecay(nextDecay);
+            if (signal.aborted) return;
 
+            onSetDailyDecay(nextDecay);
             emitAuthChanged();
-            onSetStage("done")
-            //   setStage("done");
+            onSetStage("done");
+
         } catch (err: any) {
+            if (err?.name === 'AbortError' || signal.aborted) return;
             alert(err?.message || 'OTP verification failed');
         } finally {
-            setLoading(false);
+            if (!signal.aborted) setLoading(false);
         }
     }, [email, otpId, dailyDecay, onSetDailyDecay, onSetStage]);
 
     return (
         <View style={styles.inputBlock}>
-
             <Pressable onPress={() => onSetStage("email")}>
                 <Text style={styles.back}>← Back</Text>
             </Pressable>
@@ -122,24 +133,17 @@ const OtpBox = ({ email, otpId, dailyDecay, onSetDailyDecay, onSetStage }: TProp
 
 const styles = StyleSheet.create({
     inputBlock: { gap: 10 },
-    back: {  color: theme.colors.text, fontWeight: '500', fontSize: 15, marginBottom: 10 },
+    back: { color: theme.colors.text, fontWeight: '500', fontSize: 15, marginBottom: 10 },
     label: { color: theme.colors.text, fontWeight: '600', fontSize: 16 },
     mainButton: {
         borderRadius: 30,
         height: 48,
         fontSize: 18,
         backgroundColor: 'rgba(155, 93, 229, 0.95)',
+        color: "#fff",
     },
-    container: {
-        paddingVertical: 20,
-        paddingHorizontal: 20,
-        flex: 1,
-    },
-    row: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        gap: 10,
-    },
+    container: { paddingVertical: 20, paddingHorizontal: 20, flex: 1 },
+    row: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
     box: {
         width: 50,
         height: 55,

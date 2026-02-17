@@ -34,6 +34,14 @@ export async function request<T = any>(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30_000);
 
+  if (init.signal) {
+    if (init.signal.aborted) {
+      controller.abort();
+    } else {
+      init.signal.addEventListener("abort", () => controller.abort(), { once: true });
+    }
+  }
+
   try {
     const res = await fetch(url, {
       ...init,
@@ -51,7 +59,14 @@ export async function request<T = any>(
 
     return data as T;
   } catch (err: any) {
-    if (err?.name === "AbortError") throw new HttpError("Request timed out", 408);
+    if (err?.name === "AbortError") {
+      if (init.signal?.aborted) {
+        const abortErr = new Error("Request cancelled");
+        abortErr.name = "AbortError";
+        throw abortErr;
+      }
+      throw new HttpError("Request timed out", 408);
+    }
     if (err instanceof HttpError) throw err;
     throw new HttpError(err?.message || "Network error", 0);
   } finally {
@@ -60,7 +75,8 @@ export async function request<T = any>(
 }
 
 export const http = {
-  get: <T = any>(path: string, init?: RequestInit) => request<T>(path, { ...init, method: "GET" }),
+  get: <T = any>(path: string, init?: RequestInit) =>
+    request<T>(path, { ...init, method: "GET" }),
   post: <T = any>(path: string, json?: Json, init?: RequestInit) =>
     request<T>(path, { ...init, method: "POST", json }),
   patch: <T = any>(path: string, json?: Json, init?: RequestInit) =>
