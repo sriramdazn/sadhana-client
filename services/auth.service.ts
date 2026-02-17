@@ -28,7 +28,7 @@ export async function requestEmailOtp(email: string) {
   return http.post<RequestOtpResponse>(REQUEST_OTP_PATH, { email });
 }
 
-export async function verifyEmailOtp(payload: { otpId: string; otp: number, sadhana: []}) {
+export async function verifyEmailOtp(payload: { otpId: string; otp: number, sadanas: []}) {
   return http.post<VerifyOtpResponse>(VERIFY_OTP_PATH, payload);
 }
 
