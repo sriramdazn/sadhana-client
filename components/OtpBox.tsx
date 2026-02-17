@@ -45,7 +45,6 @@ const OtpBox = ({ email, otpId, dailyDecay, onSetDailyDecay, onSetStage }: TProp
             const storedDecay = preSession.decayPoints;
             const journey = (await useGuestStorage.getJourney()) ?? [];
             const payload = await sadanaSyncPayload({ days: journey });
-            console.log("otp box payload", payload)
             const res = await verifyEmailOtp({ otpId, otp: Number(otp), ...payload });
             const user = await getUserId(res.token);
 

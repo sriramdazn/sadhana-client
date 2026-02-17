@@ -27,24 +27,8 @@ const KEYS = {
   journey: "sadhana_journey",
   syncedForUser: (userId: string) => `sadhana_guest_synced:${userId}`,
 };
-
-async function readJson<T>(key: string): Promise<T | null> {
-  const raw = await AsyncStorage.getItem(key);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return null;
-  }
-}
-
-async function writeJson<T>(key: string, value: T) {
-  await AsyncStorage.setItem(key, JSON.stringify(value));
-}
-
 export const useGuestStorage = {
   KEYS,
-
   // Home
   async getHome(): Promise<HomeState | null> {
     return readJson<HomeState>(KEYS.home);
@@ -61,16 +45,23 @@ export const useGuestStorage = {
     await writeJson(KEYS.journey, state);
   },
 
-  // Sync flag
-  async wasSyncedForUser(userId: string): Promise<boolean> {
-    return (await AsyncStorage.getItem(KEYS.syncedForUser(userId))) === "1";
-  },
-  async markSyncedForUser(userId: string) {
-    await AsyncStorage.setItem(KEYS.syncedForUser(userId), "1");
-  },
-
   // Optional cleanup after successful sync
   async clearGuestData() {
     await AsyncStorage.multiRemove([KEYS.home, KEYS.journey]);
   },
 };
+
+async function readJson<T>(key: string): Promise<T | null> {
+  const raw = await AsyncStorage.getItem(key);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+async function writeJson<T>(key: string, value: T) {
+  await AsyncStorage.setItem(key, JSON.stringify(value));
+}
+

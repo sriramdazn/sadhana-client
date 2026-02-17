@@ -11,72 +11,83 @@ import { theme } from "@/constants/theme";
 import { useAuthStatus } from "@/hooks/useAuthStatus";
 import { useJourneyStore } from "@/hooks/useJourneyStore";
 
-import { todayIso, isoToDayLabel } from "@/utils/todayDate";
+import { todayIso, isoToDayLabel, toYmd } from "@/utils/todayDate";
 import { COMPLETED_KEY, TOTAL_POINTS_KEY } from "@/constants/constant";
 import { getSadhanas } from "@/services/SadhanaService";
 import { Sadhana, SadhanaLogs } from "@/components/types/types";
 import { router } from "expo-router";
 import { EmptyLogs } from "@/components/EmptyLogs";
+import { migrateCompletedStorageToDailyCounts } from "@/utils/completedDailyCounts";
 
 export default function JourneyScreen() {
   const { isLoggedIn, accessToken } = useAuthStatus();
   const { days, loading, load, deleteItem } = useJourneyStore({ isLoggedIn, accessToken });
   const [sadanaMap, setSadanaMap] = useState<Record<string, { name: string; points: number }>>({});
+  const [deleteTarget, setDeleteTarget] = useState<SadhanaLogs | null>(null);
   const logs: SadhanaLogs[] = useMemo(() => (Array.isArray(days) ? days : []), [days]);
   const grouped = useMemo(() => {
     return logs.reduce((acc: Record<string, SadhanaLogs[]>, item) => {
-      (acc[item.date] ||= []).push(item);
+      const date = toYmd(item.dateTime);
+      (acc[date] ||= []).push(item);
       return acc;
     }, {});
   }, [logs]);
-  const sortedDates = useMemo(() => Object.keys(grouped).sort((a, b) => b.localeCompare(a)), [grouped]);
-  const [deleteTarget, setDeleteTarget] = useState<SadhanaLogs | null>(null);
 
-    // reload when screen focused
-    useFocusEffect(
-      useCallback(() => {
-        load();
-      }, [load])
-    );
-    // reload on login change
-    useEffect(() => {
+  const sortedDates = useMemo(
+    () => Object.keys(grouped).sort((a, b) => b.localeCompare(a)),
+    [grouped]
+  );
+
+  useFocusEffect(
+    useCallback(() => {
       load();
-    }, [isLoggedIn, accessToken, load]);
-  
-    useEffect(() => {
-      (async () => {
-        try {
-          const list: Sadhana[] = await getSadhanas();
-          const map: Record<string, { name: string; points: number }> = {};
-          list.forEach((s) => {
-            map[s.id] = { name: s.name, points: s.points };
-          });
-          setSadanaMap(map);
-        } catch {}
-      })();
-    }, []);
+    }, [load])
+  );
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const list: Sadhana[] = await getSadhanas();
+        const map: Record<string, { name: string; points: number }> = {};
+        list.forEach((s) => {
+          map[s.id] = { name: s.name, points: s.points };
+        });
+        setSadanaMap(map);
+      } catch {}
+    })();
+  }, []);
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     const target = deleteTarget;
     setDeleteTarget(null);
-    await deleteItem({ date: target.date, sadanaId: target.sadanaId });
-    // remove tick if deleting today
-    if (target.date === todayIso()) {
-      const raw = await AsyncStorage.getItem(COMPLETED_KEY);
-      const completed = raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
-      if (completed[target.sadanaId]) {
-        delete completed[target.sadanaId];
-        await AsyncStorage.setItem(COMPLETED_KEY, JSON.stringify(completed));
-      }
-      // subtract points
-      const pts = sadanaMap[target.sadanaId]?.points || 0;
-      if (pts > 0) {
-        const pRaw = await AsyncStorage.getItem(TOTAL_POINTS_KEY);
-        const current = pRaw ? Number(pRaw) : 0;
-        const next = Math.max(0, current - pts);
-        await AsyncStorage.setItem(TOTAL_POINTS_KEY, String(next));
-      }
+    await deleteItem(target);
+
+    // Update COMPLETED_KEY (supports counts)
+    const raw = await AsyncStorage.getItem(COMPLETED_KEY);
+    const normalized = migrateCompletedStorageToDailyCounts(raw ? JSON.parse(raw) : {});
+
+    const dayKey = toYmd(target.dateTime);
+    const dayMap = { ...(normalized[dayKey] || {}) };
+    const current = Number(dayMap[target.sadanaId] || 0);
+
+    if (current > 1) {
+      dayMap[target.sadanaId] = current - 1;
+      normalized[dayKey] = dayMap;
+    } else if (current === 1) {
+      delete dayMap[target.sadanaId];
+      if (Object.keys(dayMap).length === 0) delete normalized[dayKey];
+      else normalized[dayKey] = dayMap;
+    }
+
+    await AsyncStorage.setItem(COMPLETED_KEY, JSON.stringify(normalized));
+    // Subtract points
+    const pts = sadanaMap[target.sadanaId]?.points || 0;
+    if (pts > 0) {
+      const pRaw = await AsyncStorage.getItem(TOTAL_POINTS_KEY);
+      const currentPoints = pRaw ? Number(pRaw) : 0;
+      const next = Math.max(0, currentPoints - pts);
+      await AsyncStorage.setItem(TOTAL_POINTS_KEY, String(next));
     }
   };
 
@@ -84,24 +95,23 @@ export default function JourneyScreen() {
     <Screen>
       <ScrollView contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>My Sadhana Logs</Text>
-                <GlassCard style={{ marginTop: 12 }}>
+        <GlassCard style={{ marginTop: 12 }}>
           {loading ? (
             <Text style={styles.loading}>Loading...</Text>
           ) : sortedDates.length === 0 ? (
-            <EmptyLogs
-            onPrimary={() => router.replace("/")}
-          />
+            <EmptyLogs onPrimary={() => router.replace("/")} />
           ) : (
             <View style={{ gap: 16 }}>
               {sortedDates.map((date) => (
                 <View key={date}>
                   <Text style={styles.dayLabel}>{isoToDayLabel(date)}</Text>
+
                   <View style={{ gap: 10, marginTop: 10 }}>
-                    {grouped[date].map((item) => {
+                    {grouped[date].map((item, idx) => {
                       const meta = sadanaMap[item.sadanaId];
                       return (
                         <Pressable
-                          key={`${item.date}_${item.sadanaId}`}
+                          key={`${item.dateTime}_${item.sadanaId}_${idx}`}
                           onPress={() => setDeleteTarget(item)}
                           style={styles.logRow}
                         >
@@ -131,24 +141,22 @@ export default function JourneyScreen() {
   );
 }
 
- const styles = StyleSheet.create({
-    title: { color: theme.colors.text, fontWeight: "900", fontSize: 22, marginTop: 8 },
-    loading: { color: theme.colors.muted, fontWeight: "800" },
-    dayLabel: { color: theme.colors.muted, fontWeight: "900", marginTop: 4 },
-  
-    logRow: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      paddingVertical: 14,
-      paddingHorizontal: 14,
-      borderRadius: 16,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      backgroundColor: "rgba(255,255,255,0.08)",
-    },
-    logText: { color: theme.colors.text, fontWeight: "900" },
-    logPts: { color: theme.colors.muted, fontWeight: "900" },
-  });
-  
-  
+const styles = StyleSheet.create({
+  title: { color: theme.colors.text, fontWeight: "900", fontSize: 22, marginTop: 8 },
+  loading: { color: theme.colors.muted, fontWeight: "800" },
+  dayLabel: { color: theme.colors.muted, fontWeight: "900", marginTop: 4 },
+
+  logRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  logText: { color: theme.colors.text, fontWeight: "900" },
+  logPts: { color: theme.colors.muted, fontWeight: "900" },
+});

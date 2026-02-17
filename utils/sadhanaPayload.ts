@@ -1,23 +1,50 @@
 import { TOTAL_POINTS_KEY } from "@/constants/constant";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-type LogItem = { date: string; sadanaId: string };
+// Accept your real local log shape
+type JourneyLog = {
+  dateTime: string;   // ISO
+  sadanaId: string;
+  clientId?: string;
+};
 
-export async function sadanaSyncPayload(args: { days: LogItem[] }) {
+function normalizeIso(v: any) {
+  return typeof v === "string" ? v : "";
+}
+
+function normalizeId(v: any) {
+  return typeof v === "string" ? v : "";
+}
+
+export async function sadanaSyncPayload(args: { days: JourneyLog[] }) {
   const days = Array.isArray(args.days) ? args.days : [];
-  const points = await AsyncStorage.getItem(TOTAL_POINTS_KEY);
-  
-  const map: Record<string, Set<string>> = {};
+
+  // (optional) if backend cares about total points, keep reading it
+  const pointsRaw = await AsyncStorage.getItem(TOTAL_POINTS_KEY);
+  const points = pointsRaw ? Number(pointsRaw) || 0 : 0;
+
+  // Deduplicate (dateTime + sadanaId) so we don’t send accidental repeats
+  const seen = new Set<string>();
+  const sadanas = [];
+
   for (const x of days) {
-    if (!x?.date || !x?.sadanaId) continue;
-    (map[x.date] ||= new Set()).add(x.sadanaId);
+    const dateTime = normalizeIso((x as any)?.dateTime || (x as any)?.date || "");
+    const sadanaId = normalizeId((x as any)?.sadanaId || (x as any)?.sadana || "");
+    if (!dateTime || !sadanaId) continue;
+
+    const key = `${dateTime}__${sadanaId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    sadanas.push({ sadanaId, dateTime });
   }
 
+  // Sort newest first (optional)
+  sadanas.sort((a, b) => b.dateTime.localeCompare(a.dateTime));
+
   return {
-    sadanas: Object.keys(map).map((date) => ({
-      date,
-      points,
-      optedSadanas: Array.from(map[date]),
-    })),
+    // include points only if your verifyEmailOtp endpoint expects it
+    // points,
+    sadanas,
   };
 }

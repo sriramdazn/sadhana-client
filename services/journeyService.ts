@@ -1,91 +1,159 @@
-import { JourneyService, LogItem } from "@/components/types/types";
+import { JourneyService, RemoteTrackerResponse, SadhanaLogs } from "@/components/types/types";
 import { API_BASE_URL } from "@/constants/api.constant";
 import { JOURNEY_KEY } from "@/constants/constant";
-import { isoToDayLabel } from "@/utils/todayDate";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-type RemoteTrackerRow = {
-  date: string; // "2026-02-13T00:00:00.000Z"
-  optedSadanas?: string[];
-};
+const JOURNEY_EXTRAS_KEY = `${JOURNEY_KEY}:extras`;
 
-type RemoteTrackerResponse = {
-  data?: RemoteTrackerRow[];
-};
-
-function toYmd(dateStr: string) {
-  if (!dateStr) return "";
-  return dateStr.length >= 10 ? dateStr.slice(0, 10) : dateStr;
+function normalizeLogItem(item: SadhanaLogs): SadhanaLogs {
+  return { dateTime: item?.dateTime || "", sadanaId: item?.sadanaId || "" };
 }
 
-function flattenRemote(res: RemoteTrackerResponse): LogItem[] {
-  const rows = Array.isArray(res?.data) ? res.data : [];
-  const out: LogItem[] = [];
+function countOccurrences(logs: SadhanaLogs[], target: SadhanaLogs) {
+  const t = normalizeLogItem(target);
+  return logs.reduce((n, x) => {
+    const a = normalizeLogItem(x);
+    return n + (a.dateTime === t.dateTime && a.sadanaId === t.sadanaId ? 1 : 0);
+  }, 0);
+}
 
-  const seen = new Set<string>();
+function mergeLogs(remote: SadhanaLogs[], extras: SadhanaLogs[]) {
+  const merged = [...remote, ...extras]
+    .map(normalizeLogItem)
+    .filter((x) => x.dateTime && x.sadanaId);
+  merged.sort((a, b) => b.dateTime.localeCompare(a.dateTime));
+  return merged;
+}
+
+function flattenRemote(res: any): SadhanaLogs[] {
+  const rows =
+    (Array.isArray(res?.results) && res.results) ||
+    (Array.isArray(res?.data) && res.data) ||
+    [];
+  const out: SadhanaLogs[] = [];
   for (const row of rows) {
-    const date = toYmd(row?.date || "");
-    const ids = Array.isArray(row?.optedSadanas) ? row.optedSadanas : [];
-    for (const sadanaId of ids) {
-      const key = `${date}__${sadanaId}`;
-      if (!date || !sadanaId || seen.has(key)) continue;
-      seen.add(key);
-      out.push({ date, sadanaId });
+    const dayDate = row?.date || ""; // day bucket date (not always needed)
+    const opted = Array.isArray(row?.optedSadanas) ? row.optedSadanas : [];
+    for (const it of opted) {
+      // NEW shape: { sadana, dateTime, id }
+      if (it && typeof it === "object") {
+        const sadanaId = it?.sadana || it?.sadanaId || "";
+        const dateTime = it?.dateTime || dayDate || "";
+        if (!sadanaId || !dateTime) continue;
+        out.push({
+          sadanaId,
+          dateTime,
+        } as any);
+      } else {
+        // OLD shape: optedSadanas: ["sadanaId", ...]
+        const sadanaId = String(it || "");
+        const dateTime = dayDate;
+        if (!sadanaId || !dateTime) continue;
+        out.push({ sadanaId, dateTime } as any);
+      }
     }
   }
-
-  // latest first
-  out.sort((a, b) => b.date.localeCompare(a.date));
+  out.sort((a, b) => b.dateTime.localeCompare(a.dateTime));
   return out;
 }
 
-// async function readLocalJourney(): Promise<LogItem[]> {
-//   const raw = await AsyncStorage.getItem(JOURNEY_KEY);
-//   if (!raw) return [];
-//   try {
-//     const parsed = JSON.parse(raw);
-//     return Array.isArray(parsed) ? (parsed as LogItem[]) : [];
-//   } catch {
-//     return [];
-//   }
-// }
 
-async function readLocalJourney(): Promise<LogItem[]> {
-  const raw = await AsyncStorage.getItem(JOURNEY_KEY);
-  if (!raw) return [];
-
+async function readJson<T>(key: string): Promise<T | null> {
+  const raw = await AsyncStorage.getItem(key);
+  if (!raw) return null;
   try {
-    const parsed: any = JSON.parse(raw);
-    // LogItem[]
-    if (Array.isArray(parsed)) return parsed as LogItem[];
-    // guest format: { days: [{ dayLabel, items: [{ sadhanaId }] }] }
-    const days = parsed?.days;
-    if (Array.isArray(days)) {
-      const out: LogItem[] = [];
-
-      for (const d of days) {
-        const dayLabel = d?.dayLabel;
-        const items = Array.isArray(d?.items) ? d.items : [];
-
-        const iso = isoToDayLabel(dayLabel);
-        for (const it of items) {
-          const sadanaId = it?.sadhanaId;
-          if (iso && sadanaId) out.push({ date: iso, sadanaId });
-        }
-      }
-      // migrate to new format so future reads are fast
-      await AsyncStorage.setItem(JOURNEY_KEY, JSON.stringify(out));
-      return out;
-    }
-
-    return [];
+    return JSON.parse(raw) as T;
   } catch {
-    return [];
+    return null;
   }
 }
 
-async function writeLocalJourney(logs: LogItem[]) {
-  await AsyncStorage.setItem(JOURNEY_KEY, JSON.stringify(logs));
+async function writeJson<T>(key: string, value: T) {
+  await AsyncStorage.setItem(key, JSON.stringify(value));
+}
+
+async function readLocalJourney(): Promise<SadhanaLogs[]> {
+  const parsed = await readJson<any>(JOURNEY_KEY);
+  if (!parsed) return [];
+
+  // new format: LogItem[]
+  if (Array.isArray(parsed)) {
+    return (parsed as SadhanaLogs[])
+      .map(normalizeLogItem)
+      .filter((x) => x.dateTime && x.sadanaId)
+      .sort((a, b) => b.dateTime.localeCompare(a.dateTime));
+  }
+
+  // old format: { days: [{ dayLabel, items: [{sadhanaId}] }] }
+  if (parsed?.days && Array.isArray(parsed.days)) {
+    const out: SadhanaLogs[] = [];
+    for (const d of parsed.days) {
+      const dateTime = d?.dayLabel;
+      if (!dateTime) continue;
+
+      const items = Array.isArray(d?.items) ? d.items : [];
+      for (const it of items) {
+        const sadanaId = it?.sadanaId || it?.id;
+        if (!sadanaId) continue;
+        out.push({ dateTime, sadanaId });
+      }
+    }
+
+    // migrate to new format so future reads are clean
+    const normalized = out
+      .map(normalizeLogItem)
+      .filter((x) => x.dateTime && x.sadanaId)
+      .sort((a, b) => b.dateTime.localeCompare(a.dateTime));
+
+    await writeJson(JOURNEY_KEY, normalized);
+    return normalized;
+  }
+
+  return [];
+}
+
+async function writeLocalJourney(logs: SadhanaLogs[]) {
+  await writeJson(JOURNEY_KEY, logs.map(normalizeLogItem));
+}
+
+async function readExtras(): Promise<SadhanaLogs[]> {
+  const parsed = await readJson<any>(JOURNEY_EXTRAS_KEY);
+  if (!Array.isArray(parsed)) return [];
+  return (parsed as SadhanaLogs[])
+    .map(normalizeLogItem)
+    .filter((x) => x.dateTime && x.sadanaId)
+    .sort((a, b) => b.dateTime.localeCompare(a.dateTime));
+}
+
+async function writeExtras(logs: SadhanaLogs[]) {
+  await writeJson(JOURNEY_EXTRAS_KEY, logs.map(normalizeLogItem));
+}
+
+function addLocalWithCap(prev: SadhanaLogs[], item: SadhanaLogs, cap: number) {
+  const next = [...prev, normalizeLogItem(item)].filter((x) => x.dateTime && x.sadanaId);
+
+  // cap per (date,sadanaId)
+  const capped: SadhanaLogs[] = [];
+  const counts = new Map<string, number>();
+  for (const x of next) {
+    const key = `${x.dateTime}__${x.sadanaId}`;
+    const c = counts.get(key) || 0;
+    if (c >= cap) continue;
+    counts.set(key, c + 1);
+    capped.push(x);
+  }
+
+  capped.sort((a, b) => b.dateTime.localeCompare(a.dateTime));
+  return capped;
+}
+
+function removeOne(prev: SadhanaLogs[], item: SadhanaLogs) {
+  const t = normalizeLogItem(item);
+  const idx = prev.findIndex((x) => x.dateTime === t.dateTime && x.sadanaId === t.sadanaId);
+  if (idx < 0) return prev;
+  const next = prev.slice();
+  next.splice(idx, 1);
+  return next;
 }
 
 async function apiJson<T>(url: string, method: string, token: string, body?: unknown): Promise<T> {
@@ -100,7 +168,6 @@ async function apiJson<T>(url: string, method: string, token: string, body?: unk
   });
 
   if (!res.ok) {
-    // backend often returns { code, message }
     let msg = `API error ${res.status}`;
     try {
       const j = await res.json();
@@ -112,19 +179,13 @@ async function apiJson<T>(url: string, method: string, token: string, body?: unk
     throw new Error(msg);
   }
 
-  // some endpoints may return empty body
   const text = await res.text().catch(() => "");
   return (text ? (JSON.parse(text) as T) : (undefined as unknown as T));
 }
 
-function addLocal(prev: LogItem[], item: LogItem): LogItem[] {
-  const exists = prev.some((x) => x.date === item.date && x.sadanaId === item.sadanaId);
-  if (exists) return prev;
-  return [item, ...prev].sort((a, b) => b.date.localeCompare(a.date));
-}
-
-function removeLocal(prev: LogItem[], item: LogItem): LogItem[] {
-  return prev.filter((x) => !(x.date === item.date && x.sadanaId === item.sadanaId));
+function isAlreadyOptedError(e: unknown) {
+  const msg = String((e as any)?.message || "");
+  return msg.toLowerCase().includes("already opted");
 }
 
 export function createJourneyService({
@@ -133,57 +194,105 @@ export function createJourneyService({
 }: JourneyService = {}) {
   const token = accessToken;
   const canUseRemote = isLoggedIn && !!token;
-  
+
+  async function loadRemoteOnly(): Promise<SadhanaLogs[]> {
+    const res = await apiJson<RemoteTrackerResponse>(
+      `${API_BASE_URL}/v1/sadana-tracker`,
+      "GET",
+      token as string
+    );
+    return flattenRemote(res);
+  }
+
   return {
-    async load(): Promise<LogItem[]> {
+    async load(): Promise<SadhanaLogs[]> {
       if (canUseRemote) {
-        const res = await apiJson<RemoteTrackerResponse>(
-          `${API_BASE_URL}/v1/sadana-tracker`,
-          "GET",
-          token as string
-        );
-        return flattenRemote(res);
+        const [remote, extras] = await Promise.all([loadRemoteOnly(), readExtras()]);
+        const merged = mergeLogs(remote, extras);
+        await writeLocalJourney(merged);
+        return merged;
       }
       return readLocalJourney();
-    },
+    },   
 
-    async addItem(item: LogItem): Promise<LogItem[]> {
+    async addItem(item: SadhanaLogs): Promise<SadhanaLogs[]> {
+      const normalized = normalizeLogItem(item);
+    
       if (canUseRemote) {
+        const extras = await readExtras();
+    
         try {
+          // Try first-time POST
           await apiJson(
             `${API_BASE_URL}/v1/sadana-tracker`,
             "POST",
             token as string,
-            item // { date, sadanaId }
+            normalized
           );
+          // After successful POST, fetch latest remote once
+          const freshRemote = await loadRemoteOnly();
+          const merged = mergeLogs(freshRemote, extras);
+          await writeLocalJourney(merged);
+          return merged;
         } catch (e: any) {
-          // backend duplicate message => keep state, don't crash UI
-          const msg = String(e?.message || "");
-          if (!msg.includes("already opted")) throw e;
+          // If server says "already opted", this is the 2nd time (or duplicate)
+          if (isAlreadyOptedError(e)) {
+            const nextExtras = addLocalWithCap(extras, normalized, 1);
+            await writeExtras(nextExtras);
+            // Try to show remote + extras (if GET fails, at least show extras)
+            try {
+              const remote = await loadRemoteOnly();
+              const merged = mergeLogs(remote, nextExtras);
+              await writeLocalJourney(merged); 
+              return merged;
+            } catch {
+              return mergeLogs([], nextExtras);
+            }
+          }
+          // real error
+          throw e;
         }
-        // reload
-        return this.load();
       }
-
+    
+      // Guest flow unchanged
       const prev = await readLocalJourney();
-      const next = addLocal(prev, item);
+      const next = addLocalWithCap(prev, normalized, 2);
       await writeLocalJourney(next);
       return next;
     },
+    
 
-    async deleteItem(item: LogItem): Promise<LogItem[]> {
+    async deleteItem(item: SadhanaLogs): Promise<SadhanaLogs[]> {
+      const normalized = normalizeLogItem(item);
+
       if (canUseRemote) {
+        const [remote, extras] = await Promise.all([loadRemoteOnly(), readExtras()]);
+
+        // delete extra first (2 -> 1)
+        const extraIdx = extras.findIndex(
+          (x) => x.dateTime === normalized.dateTime && x.sadanaId === normalized.sadanaId
+        );
+        if (extraIdx >= 0) {
+          const nextExtras = extras.slice();
+          nextExtras.splice(extraIdx, 1);
+          await writeExtras(nextExtras);
+          return mergeLogs(remote, nextExtras);
+        }
+
         await apiJson(
           `${API_BASE_URL}/v1/sadana-tracker`,
           "DELETE",
           token as string,
-          item // { date, sadanaId }
+          normalized
         );
-        return this.load();
+
+        const freshRemote = await loadRemoteOnly();
+        return mergeLogs(freshRemote, extras);
       }
 
+      // Guest: remove only 1 occurrence
       const prev = await readLocalJourney();
-      const next = removeLocal(prev, item);
+      const next = removeOne(prev, normalized);
       await writeLocalJourney(next);
       return next;
     },

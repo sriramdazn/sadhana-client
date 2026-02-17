@@ -27,3 +27,34 @@ export function isoToDayLabel(iso: string) {
   const day = d.getDate();
   return `${day}${ordinal(day)} ${MONTHS[d.getMonth()]}`;
 }
+
+/** "2026-02-13T00:00:00.000Z" => "2026-02-13" */
+export function toYmd(dateStr: string) {
+  if (!dateStr) return "";
+  return dateStr.length >= 10 ? dateStr.slice(0, 10) : dateStr;
+}
+
+export function isoDaysAgo(daysAgo: number) {
+  const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
+  return todayIso(d);
+}
+
+export function toIsoForSelectedDay(activeDateIso: string) {
+  // activeDateIso: "YYYY-MM-DD"
+  const [y, m, d] = activeDateIso.split("-").map(Number);
+  if (!y || !m || !d) return new Date().toISOString();
+
+  const now = new Date();
+  const dt = new Date(
+    y,
+    m - 1,
+    d,
+    now.getHours(),
+    now.getMinutes(),
+    now.getSeconds(),
+    now.getMilliseconds()
+  );
+  return dt.toISOString();
+}
+

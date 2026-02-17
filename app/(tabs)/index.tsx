@@ -1,104 +1,126 @@
-import { useEffect, useRef, useState } from "react";
-import { Image, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ScrollView, StyleSheet, Text, View, Pressable } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+
 import GlassCard from "@/components/GlassCard";
 import Dialog from "@/components/Dialog";
 import Rows from "@/components/Rows";
 import Screen from "@/components/Screen";
 import StarAnimation from "@/components/StarAnimation";
+
 import { theme } from "@/constants/theme";
-import { COMPLETED_KEY, HOME_DAY_KEY, TOTAL_POINTS_KEY } from "@/constants/constant";
+import { COMPLETED_KEY, TOTAL_POINTS_KEY } from "@/constants/constant";
 import { getSadhanas } from "@/services/SadhanaService";
 import { useAuthStatus } from "@/hooks/useAuthStatus";
 import { useJourneyStore } from "@/hooks/useJourneyStore";
-import { todayIso } from "@/utils/todayDate";
+
+import { todayIso, isoToDayLabel, isoDaysAgo, toIsoForSelectedDay } from "@/utils/todayDate";
 import { useIsFocused } from "@react-navigation/native";
 import { Sadhana } from "@/components/types/types";
 import { getSession } from "@/utils/storage";
+import { CompletedDailyCounts, migrateCompletedStorageToDailyCounts } from "@/utils/completedDailyCounts";
 
 export default function HomeScreen() {
   const [sadhanas, setSadhanas] = useState<Sadhana[]>([]);
-  const [completedIds, setCompletedIds] = useState<Record<string, boolean>>({});
+  const [completedByDate, setCompletedByDate] = useState<CompletedDailyCounts>({});
   const [showConfirm, setShowConfirm] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Sadhana | null>(null);
   const [showStars, setShowStars] = useState(false);
   const [localPoints, setLocalPoints] = useState<number>(0);
   const [decayPoints, setDecayPoints] = useState<number>(-50);
+  const [saving, setSaving] = useState(false);
 
   const scrollRef = useRef<ScrollView>(null);
   const isFocused = useIsFocused();
   const { isLoggedIn, accessToken } = useAuthStatus();
-  const [saving, setSaving] = useState(false);
   const { addItem } = useJourneyStore({ isLoggedIn, accessToken });
 
-  useEffect(() => {
-    if (!isLoggedIn) {
-      setCompletedIds({});
-    }
-  }, [isLoggedIn]);
+  // 3 tabs (daybefore yesterday, yesterday, today)
+  const tabs = useMemo(() => {
+    const dfy = isoDaysAgo(2);
+    const y = isoDaysAgo(1);
+    const t = isoDaysAgo(0);
+    return [
+      { iso: dfy, label: isoToDayLabel(dfy) },
+      { iso: y, label: isoToDayLabel(y) },
+      { iso: t, label: isoToDayLabel(t) },
+    ];
+  }, []);
+
+  const [activeDateIso, setActiveDateIso] = useState(tabs[2]?.iso || todayIso());
+  const activeCompleted = completedByDate[activeDateIso] || {};
+  const maxPerItem = 2; // each sadhana can be added twice per day
 
   useEffect(() => {
     (async () => {
-      // reset day state 
-      const today = todayIso();
-      const savedDay = await AsyncStorage.getItem(HOME_DAY_KEY);
-      if (savedDay !== today) {
-        await AsyncStorage.multiSet([
-          [HOME_DAY_KEY, today],
-          [COMPLETED_KEY, JSON.stringify({})],
-        ]);
-        setCompletedIds({});
-      } else {
-        const raw = await AsyncStorage.getItem(COMPLETED_KEY);
-        if (raw) setCompletedIds(JSON.parse(raw));
-      }
-      // load sadhanas
-      const data = await getSadhanas();
-      setSadhanas(data.filter((item: any) => item.isActive));
-    })().catch(() => {});
+      try {
+        const data = await getSadhanas();
+        setSadhanas(data.filter((x: any) => x.isActive));
+      } catch {}
+    })();
   }, []);
 
   useEffect(() => {
     if (!isFocused) return;
-    // after journey delete home refresh to get updated tick & points
-    (async () => {   
-      // reload completed (already working)
-      const cRaw = await AsyncStorage.getItem(COMPLETED_KEY);
-      setCompletedIds(cRaw ? JSON.parse(cRaw) : {});
-      // reload total points
+    (async () => {
+      // completed
+      const raw = await AsyncStorage.getItem(COMPLETED_KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      const normalized = migrateCompletedStorageToDailyCounts(parsed);
+      setCompletedByDate(normalized);
+      await AsyncStorage.setItem(COMPLETED_KEY, JSON.stringify(normalized));
+
+      // points
       const pRaw = await AsyncStorage.getItem(TOTAL_POINTS_KEY);
-      if (pRaw !== null) {
-        setLocalPoints(Number(pRaw));
-      }
+      if (pRaw != null) setLocalPoints(Number(pRaw) || 0);
+
+      // decay
       const session = await getSession();
-      if (typeof session.decayPoints === "number") {
-        setDecayPoints(session.decayPoints);
-      }
-    })();
+      if (typeof session.decayPoints === "number") setDecayPoints(session.decayPoints);
+    })().catch(() => {});
   }, [isFocused]);
 
   const handleAdd = (item: Sadhana) => {
-    if (completedIds[item.id]) return;
+    const c = activeCompleted[item.id] || 0;
+    if (c >= maxPerItem) return;
     setSelectedItem(item);
     setShowConfirm(true);
   };
 
   const confirmAddToJourney = async () => {
     if (!selectedItem || saving) return;
+
+    const currentCount = activeCompleted[selectedItem.id] || 0;
+    if (currentCount >= maxPerItem) {
+      setShowConfirm(false);
+      setSelectedItem(null);
+      return;
+    }
     setSaving(true);
     try {
       await addItem({
-        date: todayIso(),
+        dateTime: toIsoForSelectedDay(activeDateIso),
         sadanaId: selectedItem.id,
       });
-      const nextCompleted = { ...completedIds, [selectedItem.id]: true };
-      setCompletedIds(nextCompleted);
-      await AsyncStorage.setItem(COMPLETED_KEY, JSON.stringify(nextCompleted));
-  
+
+      //increment count for selected day + sadhana
+      const nextCount = Math.min(maxPerItem, currentCount + 1);
+      const nextByDate: CompletedDailyCounts = {
+        ...completedByDate,
+        [activeDateIso]: {
+          ...(completedByDate[activeDateIso] || {}),
+          [selectedItem.id]: nextCount,
+        },
+      };
+
+      setCompletedByDate(nextByDate);
+      await AsyncStorage.setItem(COMPLETED_KEY, JSON.stringify(nextByDate));
+
+      // points
       const nextPoints = localPoints + selectedItem.points;
       setLocalPoints(nextPoints);
       await AsyncStorage.setItem(TOTAL_POINTS_KEY, String(nextPoints));
-  
+
       setShowStars(true);
       setShowConfirm(false);
       scrollRef.current?.scrollTo({ y: 0, animated: true });
@@ -109,7 +131,7 @@ export default function HomeScreen() {
       setSelectedItem(null);
     }
   };
-  
+
   return (
     <Screen>
       <StarAnimation
@@ -132,8 +154,6 @@ export default function HomeScreen() {
         <View style={styles.hero}>
           <View style={styles.ring}>
             <View style={styles.innerGlow} />
-            {/* <Image source={require("@/assets/yoga.png")} style={styles.poseImage} resizeMode="contain" /> */}
-
             <View style={styles.pointsOverlay}>
               <Text style={styles.points}>{localPoints}</Text>
               <Text style={styles.pointsLabel}>Points</Text>
@@ -141,22 +161,46 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <Text style={styles.sectionTitle}>Today’s Sadhanas</Text>
+        {/* Day tabs */}
+        <View style={styles.tabsWrap}>
+          {tabs.map((t) => {
+            const active = t.iso === activeDateIso;
+            return (
+              <Pressable
+                key={t.iso}
+                onPress={() => setActiveDateIso(t.iso)}
+                style={[styles.tab, active && styles.tabActive]}
+              >
+                <Text style={[styles.tabText, active && styles.tabTextActive]}>
+                  {t.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
 
         <GlassCard style={{ marginTop: 10 }}>
           <View style={{ gap: 12 }}>
-            {sadhanas.map((item, index) => (
-              <Rows
-                key={item.id}
-                index={index}
-                title={item.name}
-                subtitle="Daily Practice"
-                points={item.points}
-                action="done"
-                isDone={!!completedIds[item.id]}
-                onAdd={() => handleAdd(item)}
-              />
-            ))}
+            {sadhanas.map((item, index) => {
+              const c = activeCompleted[item.id] || 0;
+              const rowDisabled = saving || c >= maxPerItem;
+              {{item.name}}
+              return (
+                <Rows
+                  key={item.id}
+                  index={index}
+                  title={item.name}
+                  subtitle="Daily Practice"
+                  points={item.points}
+                  action="done"
+                  isDone={c > 0}
+                  doneCount={c}
+                  maxCount={maxPerItem}
+                  disabled={rowDisabled}
+                  onAdd={() => handleAdd(item)}
+                />
+              );
+            })}
           </View>
         </GlassCard>
       </ScrollView>
@@ -170,7 +214,7 @@ export default function HomeScreen() {
         }}
         onConfirm={confirmAddToJourney}
         cancelText="Cancel"
-        confirmText="Yes"
+        confirmText={saving ? "Saving..." : "Yes"}
         confirmType="primary"
       />
     </Screen>
@@ -178,25 +222,40 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  decayWrap: { width: "100%", alignItems: "flex-end", marginBottom: 10 },
+  tabsWrap: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 8,
+    marginBottom: 10,
+  },
+  tab: {
+    flex: 1,
+    height: 38,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  tabActive: {
+    backgroundColor: "rgba(155, 93, 229, 0.95)",
+    borderColor: "rgba(155, 93, 229, 0.95)",
+  },
+  tabText: { color: theme.colors.text, fontWeight: "800", fontSize: 13 },
+  tabTextActive: { color: "#fff" },
 
+  decayWrap: { width: "100%", alignItems: "flex-end", marginBottom: 10 },
   decay: {
     alignSelf: "flex-end",
     color: "#FFD166",
     fontSize: 13,
     fontWeight: "700",
-    backgroundColor: "rgba(2505, 209, 102, 0.12)",
+    backgroundColor: "rgba(255, 209, 102, 0.12)",
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
     overflow: "hidden",
-  },
-
-  sectionTitle: {
-    color: theme.colors.text,
-    fontWeight: "900",
-    fontSize: 16,
-    marginTop: 8,
   },
 
   hero: { alignItems: "center", marginBottom: 24, marginTop: 12 },
@@ -222,13 +281,6 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
     backgroundColor: "rgba(255,213,128,0.15)",
-  },
-
-  poseImage: {
-    width: 135,
-    height: 135,
-    opacity: 0.35,
-    tintColor: "rgba(255,255,255,0.6)",
   },
 
   pointsOverlay: { position: "absolute", alignItems: "center", top: 50 },
