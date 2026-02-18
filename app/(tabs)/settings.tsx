@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, Text, View, Pressable } from "react-native";
-import { Button, Input } from "antd";
+import { Input } from "antd";
 import Screen from "@/components/Screen";
 import GlassCard from "@/components/GlassCard";
 import { theme } from "@/constants/theme";
@@ -42,6 +42,48 @@ const SkeletonButton: React.FC = () => <View style={styles.skeletonButton} />;
 
 export type TStage = "default" | "email" | "otp" | "done";
 
+/**
+ * Pressable-based button replacement for antd Button
+ * - supports loading + disabled
+ * - keeps styling similar to your previous "mainButton/resetButton"
+ */
+type AppButtonProps = {
+  title: string;
+  onPress?: () => void;
+  style?: any;
+  loading?: boolean;
+  disabled?: boolean;
+  testID?: string;
+};
+
+const AppButton: React.FC<AppButtonProps> = ({
+  title,
+  onPress,
+  style,
+  loading,
+  disabled,
+  testID,
+}) => {
+  const isDisabled = !!disabled || !!loading;
+
+  return (
+    <Pressable
+      testID={testID}
+      onPress={isDisabled ? undefined : onPress}
+      style={({ pressed }) => [
+        styles.btnBase,
+        style,
+        isDisabled && styles.btnDisabled,
+        pressed && !isDisabled && styles.btnPressed,
+      ]}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: isDisabled, busy: !!loading }}
+    >
+      <Text style={styles.btnText}>{loading ? "Loading..." : title}</Text>
+    </Pressable>
+  );
+};
+
 const SettingsScreen: React.FC = () => {
   const [stage, setStage] = useState<TStage>("default");
   const [email, setEmail] = useState("");
@@ -58,7 +100,7 @@ const SettingsScreen: React.FC = () => {
   const otpControllerRef = useRef<AbortController | null>(null);
   const resetControllerRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<ScrollView>(null);
-  const toast = useToast(); 
+  const toast = useToast();
 
   useEffect(() => {
     getLastEmail().then((value) => value && setLastEmail(value));
@@ -104,7 +146,9 @@ const SettingsScreen: React.FC = () => {
     ref.current = null;
   };
 
-  const newController = (ref: React.MutableRefObject<AbortController | null>): AbortController => {
+  const newController = (
+    ref: React.MutableRefObject<AbortController | null>
+  ): AbortController => {
     abortAndClear(ref);
     const ctrl = new AbortController();
     ref.current = ctrl;
@@ -136,7 +180,6 @@ const SettingsScreen: React.FC = () => {
     }
   };
 
-
   const setPoints = async (value: number) => {
     setDailyDecay(value);
     await saveSession({ decayPoints: value });
@@ -155,7 +198,6 @@ const SettingsScreen: React.FC = () => {
       }
     }, 400);
   };
-
 
   const handleLogout = async () => {
     setLoadingAction("logout");
@@ -222,86 +264,75 @@ const SettingsScreen: React.FC = () => {
   return (
     <Screen>
       <View style={styles.container}>
-      <ScrollView
-        ref={scrollRef}
-        contentContainerStyle={{ paddingBottom: 58 }}
-        showsVerticalScrollIndicator={false}
-      >
-        <Text style={styles.title}>Settings</Text>
-
-        <GlassCard style={styles.card}>
-          <View style={styles.sectionContainer}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Daily Decay</Text>
-              <Text style={styles.sectionDescription}>
-                Adjust how many points you lose automatically every day.
-              </Text>
-            </View>
-            <View style={styles.sliderCard}>
-              <DailyDecaySlider
-                value={dailyDecay}
-                onChange={setPoints}
-                disabled={loadingAction === "decay"}
-                loading={!hydrated}
-              />
-            </View>
-          </View>
-        </GlassCard>
-
-        <GlassCard style={{ ...styles.card, ...styles.accountCard }}>
-          <View style={styles.sectionContainer}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Account</Text>
-              <Text style={styles.sectionDescription}>
-                Cloud backup, logout & reset options.
-              </Text>
-            </View>
-
-            <View style={styles.buttonsWrapper}>
-              {!hydrated ? (
-                <SkeletonButton />
-              ) : stage === "default" ? (
-                <Button
-                  type="primary"
-                  size="large"
-                  style={styles.mainButton}
-                  onClick={() => {
-                    setStage("email");
-                    setShowPopup(true);
-                  }}
-                  loading={loadingAction === "otp"}
-                >
-                  Save to Cloud
-                </Button>
-              ) : stage === "done" ? (
-                <Button
-                  type="primary"
-                  size="large"
-                  style={styles.mainButton}
-                  onClick={handleLogout}
-                  loading={loadingAction === "logout"}
-                >
-                  Logout
-                </Button>
-              ) : null}
-
-              <Button
-                type="primary"
-                size="large"
-                style={styles.resetButton}
-                onClick={() => setShowResetDialog(true)}
-                loading={loadingAction === "reset"}
-              >
-                Reset
-              </Button>
-            </View>
-          </View>
-        </GlassCard>
-</ScrollView>
-        <Dialog
-          visible={showPopup}
-          onCancel={handlePopupCancel}
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={{ paddingBottom: 58 }}
+          showsVerticalScrollIndicator={false}
         >
+          <Text style={styles.title}>Settings</Text>
+
+          <GlassCard style={styles.card}>
+            <View style={styles.sectionContainer}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Daily Decay</Text>
+                <Text style={styles.sectionDescription}>
+                  Adjust how many points you lose automatically every day.
+                </Text>
+              </View>
+              <View style={styles.sliderCard}>
+                <DailyDecaySlider
+                  value={dailyDecay}
+                  onChange={setPoints}
+                  disabled={loadingAction === "decay"}
+                  loading={!hydrated}
+                />
+              </View>
+            </View>
+          </GlassCard>
+
+          <GlassCard style={{ ...styles.card, ...styles.accountCard }}>
+            <View style={styles.sectionContainer}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Account</Text>
+                <Text style={styles.sectionDescription}>
+                  Cloud backup, logout & reset options.
+                </Text>
+              </View>
+
+              <View style={styles.buttonsWrapper}>
+                {!hydrated ? (
+                  <SkeletonButton />
+                ) : stage === "default" ? (
+                  <AppButton
+                    title="Save to Cloud"
+                    style={styles.mainButton}
+                    onPress={() => {
+                      setStage("email");
+                      setShowPopup(true);
+                    }}
+                    loading={loadingAction === "otp"}
+                  />
+                ) : stage === "done" ? (
+                  <AppButton
+                    title="Logout"
+                    style={styles.mainButton}
+                    onPress={handleLogout}
+                    loading={loadingAction === "logout"}
+                  />
+                ) : null}
+
+                <AppButton
+                  title="Reset"
+                  style={styles.resetButton}
+                  onPress={() => setShowResetDialog(true)}
+                  loading={loadingAction === "reset"}
+                />
+              </View>
+            </View>
+          </GlassCard>
+        </ScrollView>
+
+        <Dialog visible={showPopup} onCancel={handlePopupCancel}>
           {stage === "email" && (
             <>
               {lastEmail && (
@@ -324,15 +355,14 @@ const SettingsScreen: React.FC = () => {
                   onChange={(e) => setEmail(e.target.value)}
                   disabled={loadingAction === "otp"}
                 />
-                <Button
-                  type="primary"
-                  size="large"
+
+                <AppButton
+                  title="Sign In"
                   style={styles.mainButton}
-                  onClick={() => requestOtp(email)}
+                  onPress={() => requestOtp(email)}
                   loading={loadingAction === "otp"}
-                >
-                  Sign In
-                </Button>
+                  disabled={!email || loadingAction === "otp"}
+                />
               </View>
             </>
           )}
@@ -342,7 +372,9 @@ const SettingsScreen: React.FC = () => {
               email={email}
               otpId={otpId}
               dailyDecay={dailyDecay}
-              onControllerReady={(ctrl) => { otpControllerRef.current = ctrl; }}
+              onControllerReady={(ctrl) => {
+                otpControllerRef.current = ctrl;
+              }}
               onSetDailyDecay={(v) => setDailyDecay(v)}
               onSetStage={(v) => {
                 if (v === "done") {
@@ -368,18 +400,16 @@ const SettingsScreen: React.FC = () => {
             <Text style={styles.label}>
               Are you sure you want to reset all user data?
             </Text>
-            <Button
-              type="primary"
-              size="large"
+
+            <AppButton
+              title="Confirm"
               style={styles.mainButton}
               loading={loadingAction === "reset"}
-              onClick={async () => {
+              onPress={async () => {
                 await handleResetUser();
                 setShowResetDialog(false);
               }}
-            >
-              Confirm
-            </Button>
+            />
           </View>
         </Dialog>
       </View>
@@ -391,6 +421,7 @@ export default SettingsScreen;
 
 const styles = StyleSheet.create({
   container: { flex: 1, paddingTop: 6 },
+
   title: {
     color: theme.colors.text,
     fontWeight: "900",
@@ -398,10 +429,14 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: "center",
   },
+
   card: { marginTop: 16, padding: 10, borderRadius: 16 },
   content: { gap: 16 },
+
   inputBlock: { gap: 10 },
+
   label: { color: theme.colors.text, fontWeight: "900", fontSize: 16 },
+
   input: {
     paddingVertical: 10,
     borderRadius: 12,
@@ -410,14 +445,36 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     color: "#fff",
   },
+
+  // Pressable button base styles
+  btnBase: {
+    width: "100%",
+    height: 48,
+    borderRadius: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  btnPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.99 }],
+  },
+  btnDisabled: {
+    opacity: 0.55,
+  },
+  btnText: {
+    color: "#fff",
+    fontWeight: "900",
+    fontSize: 18,
+  },
+
+  // Your original button looks preserved (minus fontSize, now in btnText)
   mainButton: {
     borderRadius: 30,
     height: 48,
-    fontSize: 18,
     backgroundColor: "rgba(155, 93, 229, 0.95)",
   },
-  resetBtn: { marginTop: 15 },
-  buttonArea: { width: "100%" },
+
   skeletonButton: {
     height: 48,
     borderRadius: 30,
@@ -425,6 +482,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.border,
   },
+
   ctaCard: {
     width: "100%",
     paddingVertical: 18,
@@ -441,8 +499,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     marginLeft: 4,
   },
-  sectionBlock: { paddingVertical: 10, gap: 16 },
-  decayBlock: { marginBottom: 100 },
+
   sectionTitle: {
     color: theme.colors.text,
     fontSize: 18,
@@ -454,6 +511,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 8,
   },
+
   sliderCard: {
     paddingVertical: 18,
     paddingHorizontal: 16,
@@ -462,13 +520,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)",
   },
+
   buttonsWrapper: { marginTop: 4, gap: 14 },
   resetButton: {
     borderRadius: 30,
     height: 48,
-    fontSize: 18,
     backgroundColor: "rgba(255, 90, 90, 0.85)",
   },
+
   sectionContainer: { gap: 18 },
   sectionHeader: { gap: 6 },
   accountCard: { marginTop: 28 },

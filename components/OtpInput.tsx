@@ -4,6 +4,7 @@ import { View, TextInput, StyleSheet, Pressable, Keyboard } from 'react-native';
 type Props = {
     length?: number;
     onComplete?: (otp: string) => void;
+    onChangeOtp?: (otp: string) => void;
 };
 
 export type OtpInputRef = {
@@ -12,7 +13,7 @@ export type OtpInputRef = {
 };
 
 const OtpInput = forwardRef<OtpInputRef, Props>(
-  ({ length = 6, onComplete }, ref) => {
+  ({ length = 6, onComplete, onChangeOtp }, ref) => {
     const [otp, setOtp] = useState<string[]>(Array(length).fill(''));
     const inputsRef = useRef<Array<TextInput | null>>([]);
 
@@ -38,6 +39,7 @@ const OtpInput = forwardRef<OtpInputRef, Props>(
             }
 
             setOtp(newOtp);
+            onChangeOtp?.(newOtp);
 
             const lastIndex = Math.min(pasted.length, length - 1);
             focusInput(lastIndex);
@@ -53,6 +55,7 @@ const OtpInput = forwardRef<OtpInputRef, Props>(
         const newOtp = [...otp];
         newOtp[index] = clean;
         setOtp(newOtp);
+        onChangeOtp?.(newOtp);
 
         // move next only if typed a digit
         if (clean && index < length - 1) {
@@ -75,6 +78,7 @@ const OtpInput = forwardRef<OtpInputRef, Props>(
             // clear current
             newOtp[index] = '';
             setOtp(newOtp);
+            onChangeOtp?.(newOtp);
             return;
         }
 
@@ -82,6 +86,7 @@ const OtpInput = forwardRef<OtpInputRef, Props>(
         if (index > 0) {
             newOtp[index - 1] = '';
             setOtp(newOtp);
+            onChangeOtp?.(newOtp);
             focusInput(index - 1);
         }
     };
