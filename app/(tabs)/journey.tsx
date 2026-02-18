@@ -135,11 +135,11 @@ export default function JourneyScreen() {
                 </View>
               ))}
 
-              <InfiniteScroll loadMore={loadNextPage} hasMore={hasMore}>
+              <InfiniteScroll style={styles.kya} loadMore={loadNextPage} hasMore={hasMore}>
                 {hasMore ? (
                   <Text style={styles.loadingMore}>Loading...</Text>
                 ) : (
-                  <Text style={styles.endText}>No more logs</Text>
+                  null
                 )}
               </InfiniteScroll>
             </View>
@@ -177,6 +177,7 @@ const styles = StyleSheet.create({
   },
   logText: { color: theme.colors.text, fontWeight: "900" },
   logPts: { color: theme.colors.muted, fontWeight: "900" },
-  loadingMore: { textAlign: "center", paddingVertical: 8, color: "#999" },
+  loadingMore: { textAlign: "center", paddingVertical: 0, color: "#999" },
   endText: { textAlign: "center", paddingVertical: 10, color: "#666" },
+  kya: {margin: 0 , padding: 0}
 });

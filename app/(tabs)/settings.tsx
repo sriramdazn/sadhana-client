@@ -33,6 +33,7 @@ import Dialog from "@/components/Dialog";
 import { useFocusEffect } from "expo-router";
 import { ScrollView } from "react-native-gesture-handler";
 import { useToast } from "@/components/Toast";
+import { clearJourneyCache } from "@/hooks/useJourneyStore";
 
 const DEFAULT_DECAY = -50;
 
@@ -175,6 +176,7 @@ const SettingsScreen: React.FC = () => {
         useGuestStorage.KEYS.home,
         useGuestStorage.KEYS.journey,
       ]);
+      clearJourneyCache(); 
       setDailyDecay(-50);
       emitAuthChanged();
       refresh();
@@ -209,6 +211,7 @@ const SettingsScreen: React.FC = () => {
         useGuestStorage.KEYS.home,
         useGuestStorage.KEYS.journey,
       ]);
+      clearJourneyCache(); 
       setDailyDecay(-50);
       toast.show("success", "Reset Successful");
     } catch (err: any) {
