@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, Text, View, Pressable } from "react-native";
-import { Input } from "antd";
+import { TextInput } from "react-native";
 import Screen from "@/components/Screen";
 import GlassCard from "@/components/GlassCard";
 import { theme } from "@/constants/theme";
@@ -32,7 +32,7 @@ import { useGuestStorage } from "@/hooks/useGuestStorage";
 import Dialog from "@/components/Dialog";
 import { useFocusEffect } from "expo-router";
 import { ScrollView } from "react-native-gesture-handler";
-import { useToast } from "@/components/Toast";
+// import { useToast } from "@/components/Toast";
 
 const DEFAULT_DECAY = -50;
 
@@ -100,7 +100,7 @@ const SettingsScreen: React.FC = () => {
   const otpControllerRef = useRef<AbortController | null>(null);
   const resetControllerRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<ScrollView>(null);
-  const toast = useToast();
+  // const toast = useToast();
 
   useEffect(() => {
     getLastEmail().then((value) => value && setLastEmail(value));
@@ -174,7 +174,7 @@ const SettingsScreen: React.FC = () => {
       setStage("otp");
     } catch (err: any) {
       if (err?.name === "AbortError") return;
-      toast.show("error", "Failed to request OTP");
+      // toast.show("error", "Failed to request OTP");
     } finally {
       setLoadingAction(null);
     }
@@ -224,7 +224,7 @@ const SettingsScreen: React.FC = () => {
       setOtpId(null);
       setStage("default");
     } catch (err: any) {
-      toast.show("error", "Logout Failed");
+      // toast.show("error", "Logout Failed");
     } finally {
       setLoadingAction(null);
     }
@@ -252,10 +252,10 @@ const SettingsScreen: React.FC = () => {
         useGuestStorage.KEYS.journey,
       ]);
       setDailyDecay(-50);
-      toast.show("success", "Reset Successful");
+      // toast.show("success", "Reset Successful");
     } catch (err: any) {
       if (err?.name === "AbortError") return;
-      toast.show("error", "Reset Failed");
+      // toast.show("error", "Reset Failed");
     } finally {
       setLoadingAction(null);
     }
@@ -347,15 +347,19 @@ const SettingsScreen: React.FC = () => {
 
               <View style={styles.inputBlock}>
                 <Text style={styles.label}>Enter Email</Text>
-                <Input
+                <TextInput
                   placeholder="you@example.com"
-                  size="large"
+                  placeholderTextColor={theme.colors.muted ?? "rgba(255,255,255,0.6)"}
                   style={styles.input}
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={loadingAction === "otp"}
+                  onChangeText={setEmail}
+                  editable={loadingAction !== "otp"}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  textContentType="emailAddress"
+                  returnKeyType="done"
                 />
-
                 <AppButton
                   title="Sign In"
                   style={styles.mainButton}
@@ -439,13 +443,16 @@ const styles = StyleSheet.create({
 
   input: {
     paddingVertical: 10,
+    paddingHorizontal: 14,
     borderRadius: 12,
     backgroundColor: "rgba(255,255,255,0.08)",
     borderColor: theme.colors.border,
     borderWidth: 1,
     color: "#fff",
+    fontSize: 16,
+    fontWeight: "700",
   },
-
+  
   // Pressable button base styles
   btnBase: {
     width: "100%",
