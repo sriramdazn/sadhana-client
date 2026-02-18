@@ -19,6 +19,7 @@
     "@react-navigation/elements": "^2.6.3",
     "@react-navigation/native": "^7.1.8",
     "antd": "^6.2.3",
+    "antd-mobile": "^5.42.3",
     "expo": "~54.0.33",
     "expo-auth-session": "^7.0.10",
     "expo-blur": "~15.0.8",
