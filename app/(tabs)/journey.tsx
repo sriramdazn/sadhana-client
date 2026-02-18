@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { InfiniteScroll } from "antd-mobile";
 
 import Screen from "@/components/Screen";
 import GlassCard from "@/components/GlassCard";
@@ -11,7 +12,7 @@ import { theme } from "@/constants/theme";
 import { useAuthStatus } from "@/hooks/useAuthStatus";
 import { useJourneyStore } from "@/hooks/useJourneyStore";
 
-import { todayIso, isoToDayLabel, toYmd } from "@/utils/todayDate";
+import { isoToDayLabel, toYmd } from "@/utils/todayDate";
 import { COMPLETED_KEY, TOTAL_POINTS_KEY } from "@/constants/constant";
 import { getSadhanas } from "@/services/SadhanaService";
 import { Sadhana, SadhanaLogs } from "@/components/types/types";
@@ -21,10 +22,22 @@ import { migrateCompletedStorageToDailyCounts } from "@/utils/completedDailyCoun
 
 export default function JourneyScreen() {
   const { isLoggedIn, accessToken } = useAuthStatus();
-  const { days, loading, load, deleteItem } = useJourneyStore({ isLoggedIn, accessToken });
+  const { days, loading, load, loadNextPage, deleteItem, hasMore } = useJourneyStore({
+    isLoggedIn,
+    accessToken,
+  });
+
   const [sadanaMap, setSadanaMap] = useState<Record<string, { name: string; points: number }>>({});
   const [deleteTarget, setDeleteTarget] = useState<SadhanaLogs | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
+
   const logs: SadhanaLogs[] = useMemo(() => (Array.isArray(days) ? days : []), [days]);
+
   const grouped = useMemo(() => {
     return logs.reduce((acc: Record<string, SadhanaLogs[]>, item) => {
       const date = toYmd(item.dateTime);
@@ -36,12 +49,6 @@ export default function JourneyScreen() {
   const sortedDates = useMemo(
     () => Object.keys(grouped).sort((a, b) => b.localeCompare(a)),
     [grouped]
-  );
-
-  useFocusEffect(
-    useCallback(() => {
-      load();
-    }, [load])
   );
 
   useEffect(() => {
@@ -63,7 +70,6 @@ export default function JourneyScreen() {
     setDeleteTarget(null);
     await deleteItem(target);
 
-    // Update COMPLETED_KEY (supports counts)
     const raw = await AsyncStorage.getItem(COMPLETED_KEY);
     const normalized = migrateCompletedStorageToDailyCounts(raw ? JSON.parse(raw) : {});
 
@@ -81,7 +87,6 @@ export default function JourneyScreen() {
     }
 
     await AsyncStorage.setItem(COMPLETED_KEY, JSON.stringify(normalized));
-    // Subtract points
     const pts = sadanaMap[target.sadanaId]?.points || 0;
     if (pts > 0) {
       const pRaw = await AsyncStorage.getItem(TOTAL_POINTS_KEY);
@@ -93,12 +98,16 @@ export default function JourneyScreen() {
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: 40 }}
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.title}>My Sadhana Logs</Text>
+
         <GlassCard style={{ marginTop: 12 }}>
-          {loading ? (
+          {loading && logs.length === 0 ? (
             <Text style={styles.loading}>Loading...</Text>
-          ) : sortedDates.length === 0 ? (
+          ) : sortedDates.length === 0 && !hasMore ? (
             <EmptyLogs onPrimary={() => router.replace("/")} />
           ) : (
             <View style={{ gap: 16 }}>
@@ -116,13 +125,23 @@ export default function JourneyScreen() {
                           style={styles.logRow}
                         >
                           <Text style={styles.logText}>{meta?.name}</Text>
-                          {!!meta?.points && <Text style={styles.logPts}>+{meta.points}pts</Text>}
+                          {!!meta?.points && (
+                            <Text style={styles.logPts}>+{meta.points}pts</Text>
+                          )}
                         </Pressable>
                       );
                     })}
                   </View>
                 </View>
               ))}
+
+              <InfiniteScroll loadMore={loadNextPage} hasMore={hasMore}>
+                {hasMore ? (
+                  <Text style={styles.loadingMore}>Loading...</Text>
+                ) : (
+                  <Text style={styles.endText}>No more logs</Text>
+                )}
+              </InfiniteScroll>
             </View>
           )}
         </GlassCard>
@@ -145,7 +164,6 @@ const styles = StyleSheet.create({
   title: { color: theme.colors.text, fontWeight: "900", fontSize: 22, marginTop: 8 },
   loading: { color: theme.colors.muted, fontWeight: "800" },
   dayLabel: { color: theme.colors.muted, fontWeight: "900", marginTop: 4 },
-
   logRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -159,4 +177,6 @@ const styles = StyleSheet.create({
   },
   logText: { color: theme.colors.text, fontWeight: "900" },
   logPts: { color: theme.colors.muted, fontWeight: "900" },
+  loadingMore: { textAlign: "center", paddingVertical: 8, color: "#999" },
+  endText: { textAlign: "center", paddingVertical: 10, color: "#666" },
 });

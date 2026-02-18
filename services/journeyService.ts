@@ -12,22 +12,76 @@ export function createJourneyService({
   const token = accessToken;
   const canUseRemote = isLoggedIn && !!token;
 
-  async function loadRemoteOnly(): Promise<SadhanaLogs[]> {
+  async function loadRemotePage(page: number, limit: number): Promise<{
+    items: SadhanaLogs[];
+    totalPages: number;
+    totalResults: number;
+  }> {
     const res = await apiJson<RemoteTrackerResponse>(
-      `${API_BASE_URL}/v1/sadana-tracker`,
+      `${API_BASE_URL}/v1/sadana-tracker?page=${page}&limit=${limit}`,
       "GET",
       token as string
     );
-    return flattenRemote(res);
+
+    return {
+      items: flattenRemote(res),
+      totalPages: (res as any)?.totalPages ?? 1,
+      totalResults: (res as any)?.totalResults ?? 0,
+    };
+  }
+
+  async function loadRemoteAll(): Promise<SadhanaLogs[]> {
+    const first = await loadRemotePage(1, 100);
+    if (first.totalPages <= 1) return first.items;
+
+    const rest = await Promise.all(
+      Array.from({ length: first.totalPages - 1 }, (_, i) => loadRemotePage(i + 2, 100))
+    );
+    return [first.items, ...rest.map((r) => r.items)].flat();
   }
 
   return {
+    async loadPage(page: number, limit: number): Promise<{
+      items: SadhanaLogs[];
+      totalPages: number;
+      hasMore: boolean;
+    }> {
+      if (canUseRemote) {
+        try {
+          const extras = await readExtras();
+          const { items: remote, totalPages } = await loadRemotePage(page, limit);
+
+          const combined =
+            page === 1 ? mergeLogs(remote, extras) : remote;
+
+          return { items: combined, totalPages, hasMore: page < totalPages };
+        } catch {
+          const cached = await readLocalJourney();
+          const start = (page - 1) * limit;
+          const slice = cached.slice(start, start + limit);
+          return {
+            items: slice,
+            totalPages: Math.ceil(cached.length / limit),
+            hasMore: start + limit < cached.length,
+          };
+        }
+      }
+
+      const cached = await readLocalJourney();
+      const start = (page - 1) * limit;
+      const slice = cached.slice(start, start + limit);
+      return {
+        items: slice,
+        totalPages: Math.ceil(cached.length / limit),
+        hasMore: start + limit < cached.length,
+      };
+    },
+
     async load(): Promise<SadhanaLogs[]> {
-      // show cached journey first
       const cached = await readLocalJourney();
       if (canUseRemote) {
         try {
-          const [remote, extras] = await Promise.all([loadRemoteOnly(), readExtras()]);
+          const [remote, extras] = await Promise.all([loadRemoteAll(), readExtras()]);
           const merged = mergeLogs(remote, extras);
           await writeLocalJourney(merged);
           return merged;
@@ -37,61 +91,53 @@ export function createJourneyService({
       }
       return cached;
     },
-    
+
     async addItem(item: SadhanaLogs): Promise<SadhanaLogs[]> {
       const normalized = normalizeLogItem(item);
-    
+
       if (canUseRemote) {
         const extras = await readExtras();
-    
+
         try {
-          // Try first-time POST
           await apiJson(
             `${API_BASE_URL}/v1/sadana-tracker`,
             "POST",
             token as string,
             normalized
           );
-          // After successful POST, fetch latest remote once
-          const freshRemote = await loadRemoteOnly();
+          const freshRemote = await loadRemoteAll();
           const merged = mergeLogs(freshRemote, extras);
           await writeLocalJourney(merged);
           return merged;
         } catch (e: any) {
-          // If server says "already opted", this is the 2nd time (or duplicate)
           if (isAlreadyOptedError(e)) {
             const nextExtras = addLocalWithCap(extras, normalized, 1);
             await writeExtras(nextExtras);
-            // Try to show remote + extras (if GET fails, at least show extras)
             try {
-              const remote = await loadRemoteOnly();
+              const remote = await loadRemoteAll();
               const merged = mergeLogs(remote, nextExtras);
-              await writeLocalJourney(merged); 
+              await writeLocalJourney(merged);
               return merged;
             } catch {
               return mergeLogs([], nextExtras);
             }
           }
-          // real error
           throw e;
         }
       }
-    
-      // Guest flow unchanged
+
       const prev = await readLocalJourney();
       const next = addLocalWithCap(prev, normalized, 2);
       await writeLocalJourney(next);
       return next;
     },
-    
 
     async deleteItem(item: SadhanaLogs): Promise<SadhanaLogs[]> {
       const normalized = normalizeLogItem(item);
 
       if (canUseRemote) {
-        const [remote, extras] = await Promise.all([loadRemoteOnly(), readExtras()]);
+        const [remote, extras] = await Promise.all([loadRemoteAll(), readExtras()]);
 
-        // delete extra first (2 -> 1)
         const extraIdx = extras.findIndex(
           (x) => x.dateTime === normalized.dateTime && x.sadanaId === normalized.sadanaId
         );
@@ -109,11 +155,10 @@ export function createJourneyService({
           normalized
         );
 
-        const freshRemote = await loadRemoteOnly();
+        const freshRemote = await loadRemoteAll();
         return mergeLogs(freshRemote, extras);
       }
 
-      // Guest: remove only 1 occurrence
       const prev = await readLocalJourney();
       const next = removeOne(prev, normalized);
       await writeLocalJourney(next);
@@ -141,20 +186,15 @@ function flattenRemote(res: any): SadhanaLogs[] {
     [];
   const out: SadhanaLogs[] = [];
   for (const row of rows) {
-    const dayDate = row?.date || ""; // day bucket date (not always needed)
+    const dayDate = row?.date || "";
     const opted = Array.isArray(row?.optedSadanas) ? row.optedSadanas : [];
     for (const it of opted) {
-      // NEW shape: { sadana, dateTime, id }
       if (it && typeof it === "object") {
         const sadanaId = it?.sadana || it?.sadanaId || "";
         const dateTime = it?.dateTime || dayDate || "";
         if (!sadanaId || !dateTime) continue;
-        out.push({
-          sadanaId,
-          dateTime,
-        } as any);
+        out.push({ sadanaId, dateTime } as any);
       } else {
-        // OLD shape: optedSadanas: ["sadanaId", ...]
         const sadanaId = String(it || "");
         const dateTime = dayDate;
         if (!sadanaId || !dateTime) continue;
@@ -165,7 +205,6 @@ function flattenRemote(res: any): SadhanaLogs[] {
   out.sort((a, b) => b.dateTime.localeCompare(a.dateTime));
   return out;
 }
-
 
 async function readJson<T>(key: string): Promise<T | null> {
   const raw = await AsyncStorage.getItem(key);
@@ -185,7 +224,6 @@ async function readLocalJourney(): Promise<SadhanaLogs[]> {
   const parsed = await readJson<any>(JOURNEY_KEY);
   if (!parsed) return [];
 
-  // new format: LogItem[]
   if (Array.isArray(parsed)) {
     return (parsed as SadhanaLogs[])
       .map(normalizeLogItem)
@@ -193,13 +231,11 @@ async function readLocalJourney(): Promise<SadhanaLogs[]> {
       .sort((a, b) => b.dateTime.localeCompare(a.dateTime));
   }
 
-  // old format: { days: [{ dayLabel, items: [{sadhanaId}] }] }
   if (parsed?.days && Array.isArray(parsed.days)) {
     const out: SadhanaLogs[] = [];
     for (const d of parsed.days) {
       const dateTime = d?.dayLabel;
       if (!dateTime) continue;
-
       const items = Array.isArray(d?.items) ? d.items : [];
       for (const it of items) {
         const sadanaId = it?.sadanaId || it?.id;
@@ -207,13 +243,10 @@ async function readLocalJourney(): Promise<SadhanaLogs[]> {
         out.push({ dateTime, sadanaId });
       }
     }
-
-    // migrate to new format so future reads are clean
     const normalized = out
       .map(normalizeLogItem)
       .filter((x) => x.dateTime && x.sadanaId)
       .sort((a, b) => b.dateTime.localeCompare(a.dateTime));
-
     await writeJson(JOURNEY_KEY, normalized);
     return normalized;
   }
@@ -240,8 +273,6 @@ async function writeExtras(logs: SadhanaLogs[]) {
 
 function addLocalWithCap(prev: SadhanaLogs[], item: SadhanaLogs, cap: number) {
   const next = [...prev, normalizeLogItem(item)].filter((x) => x.dateTime && x.sadanaId);
-
-  // cap per (date,sadanaId)
   const capped: SadhanaLogs[] = [];
   const counts = new Map<string, number>();
   for (const x of next) {
@@ -251,7 +282,6 @@ function addLocalWithCap(prev: SadhanaLogs[], item: SadhanaLogs, cap: number) {
     counts.set(key, c + 1);
     capped.push(x);
   }
-
   capped.sort((a, b) => b.dateTime.localeCompare(a.dateTime));
   return capped;
 }
@@ -289,7 +319,7 @@ async function apiJson<T>(url: string, method: string, token: string, body?: unk
   }
 
   const text = await res.text().catch(() => "");
-  return (text ? (JSON.parse(text) as T) : (undefined as unknown as T));
+  return text ? (JSON.parse(text) as T) : (undefined as unknown as T);
 }
 
 function isAlreadyOptedError(e: unknown) {
